@@ -36,7 +36,7 @@ TEST_CASE("First Test", "[Finite Field]"){
 
 	std::random_device rand_device;
 	std::mt19937 mersenne_engine {rand_device()};
-	std::uniform_int_distribution<u32> dist {0, ULONG_MAX};
+	std::uniform_int_distribution<u32> dist {0, UINT32_MAX};
 
 	auto generator = [&](){
 		return dist(mersenne_engine);

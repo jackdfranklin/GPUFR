@@ -1,6 +1,8 @@
 #pragma once
 
-typedef unsigned long int 	u32;
-typedef unsigned long long int 	u64;
-typedef long int 		i32;
-typedef long long int 		i64;
+#include <cstdint>
+
+typedef uint32_t u32;
+typedef uint64_t u64;
+typedef int32_t  i32;
+typedef int64_t  i64;
