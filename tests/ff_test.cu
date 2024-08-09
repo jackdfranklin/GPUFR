@@ -21,12 +21,18 @@ __global__ void ff_add_test(u32 p, u32 *a, u32 *b, u32 *c){
 	c[idx] = ff_add(a[idx], b[idx], p);	
 }
 
+__global__ void ff_subtract_test(u32 p, u32 *a, u32 *b, u32 *c){
+
+	int idx = threadIdx.x + blockIdx.x * blockDim.x;
+	c[idx] = ff_subtract(a[idx], b[idx], p);	
+}
+
 TEST_CASE("First Test", "[Finite Field]"){
 	// The setup is repeated before running each section
 	std::array<u32, 3> p_array = {13, 2546604103, 3998191247};
 
 	u32 number_of_values = 128;
-	std::vector<u32> a(number_of_values), b(number_of_values);
+	std::vector<u32> a(number_of_values), b(number_of_values), c(number_of_values);
 
 	std::random_device rand_device;
 	std::mt19937 mersenne_engine {rand_device()};
@@ -54,18 +60,38 @@ TEST_CASE("First Test", "[Finite Field]"){
 			
 			ff_add_test<<<1,128>>>(p, d_a, d_b, d_c);
 			cudaDeviceSynchronize();
-			std::vector<u32> c(number_of_values);
 			cudaMemcpy(c.data(), d_c, number_of_values*sizeof(u32), cudaMemcpyDeviceToHost);
 
 			nmod_t modulus = {0};
 			nmod_init(&modulus, p);
 
 			for(size_t i = 0; i < number_of_values; i++){
-				INFO("a = "<<a.at(i)<<", b = "<<b.at(i)<<", c = "<<c[i]);
+				INFO("p = "<<p<<", a = "<<a.at(i)<<", b = "<<b.at(i)<<", c = "<<c[i]);
 				REQUIRE(c[i] == nmod_add(a.at(i)%p, b.at(i)%p, modulus));
 			}
 
 		}
 		
 	}
+
+	SECTION("Subtraction"){
+
+		for(u32 p: p_array){
+			
+			ff_subtract_test<<<1,128>>>(p, d_a, d_b, d_c);
+			cudaDeviceSynchronize();
+			cudaMemcpy(c.data(), d_c, number_of_values*sizeof(u32), cudaMemcpyDeviceToHost);
+
+			nmod_t modulus = {0};
+			nmod_init(&modulus, p);
+
+			for(size_t i = 0; i < number_of_values; i++){
+				INFO("p = "<<p<<", a = "<<a.at(i)<<", b = "<<b.at(i)<<", c = "<<c[i]);
+				REQUIRE(c[i] == nmod_sub(a.at(i)%p, b.at(i)%p, modulus));
+			}
+
+		}
+		
+	}
+
 }
