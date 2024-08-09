@@ -7,7 +7,5 @@ __device__ u32 ff_add(u32 a, u32 b, u32 p){
 }
 
 __device__ u32 ff_subtract(u32 a, u32 b, u32 p){
-	//From FLINT implementation
-	u64 diff = a%p - b%p;
-	return ( ( ( (i64)diff ) >> 63) & (u64)p) + diff;
+	return ff_add(a, p - b%p, p);
 }
