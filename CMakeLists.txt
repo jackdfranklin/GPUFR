@@ -11,6 +11,11 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
 		add_subdirectory(tests)
 endif()
 
+if(NOT DEFINED CMAKE_CUDA_STANDARD)
+	set(CMAKE_CUDA_STANDARD 17)
+	set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+endif()
+
 include(FetchContent)
 
 add_subdirectory(src)
