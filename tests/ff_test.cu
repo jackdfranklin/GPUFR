@@ -33,6 +33,10 @@ __global__ void ff_multiply_test(u32 p, u32 *a, u32 *b, u32 *c){
 	c[idx] = ff_multiply(a[idx], b[idx], p);	
 }
 
+__global__ void ff_pow_test(u32 p, u32 *a, u32 *b, u32 *c){
+	int idx = threadIdx.x + blockIdx.x * blockDim.x;
+	c[idx] = ff_pow(a[idx], b[idx], p);
+}
 __global__ void ff_inverse_test(u32 p, u32 *a, u32 *c){
 
 	int idx = threadIdx.x + blockIdx.x * blockDim.x;
@@ -136,6 +140,33 @@ TEST_CASE("First Test", "[Finite Field]"){
 
 		}
 		
+	}
+
+	SECTION("Exponentiation"){
+
+		std::uniform_int_distribution<u32> dist {1, 200};
+
+		auto generator = [&](){
+			return dist(mersenne_engine);
+		};
+
+		std::generate(b.begin(), b.end(), generator);
+
+		cudaMemcpy(d_b, b.data(), number_of_values*sizeof(u32), cudaMemcpyHostToDevice);
+
+		for(u32 p: p_array){
+			ff_pow_test<<<1,128>>>(p, d_a, d_b, d_c);
+			cudaDeviceSynchronize();
+			cudaMemcpy(c.data(), d_c, number_of_values*sizeof(u32), cudaMemcpyDeviceToHost);
+
+			nmod_t modulus = {0};
+			nmod_init(&modulus, p);
+
+			for(size_t i = 0; i < number_of_values; i++){
+				INFO("p = "<<p<<", a = "<<a.at(i)<<", b = "<<b.at(i)<<", c = "<<c[i]);
+				REQUIRE(c[i] == nmod_pow_ui(a.at(i), b.at(i), modulus));
+			}
+		}
 	}
 
 	SECTION("Multiplicative Inverse"){

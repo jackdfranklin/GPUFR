@@ -15,6 +15,14 @@ __device__ u32 ff_multiply(u32 a, u32 b, u32 p){
 	return (u32)(prod%(u64)p);
 }
 
+__device__ u32 ff_pow(u32 m, u32 exp, u32 p){
+	u32 result = m;
+	for(int i = 0; i < exp-1; i++){
+		result = ff_multiply(result, m, p);
+	}
+	return result;
+}
+
 __device__ u32 ff_divide(u32 a, u32 b, u32 p){
 	u32 b_inv = modular_inverse(b, p);
 	return ff_multiply(a, b_inv, p);
