@@ -27,6 +27,12 @@ __global__ void ff_subtract_test(u32 p, u32 *a, u32 *b, u32 *c){
 	c[idx] = ff_subtract(a[idx], b[idx], p);	
 }
 
+__global__ void ff_multiply_test(u32 p, u32 *a, u32 *b, u32 *c){
+
+	int idx = threadIdx.x + blockIdx.x * blockDim.x;
+	c[idx] = ff_multiply(a[idx], b[idx], p);	
+}
+
 TEST_CASE("First Test", "[Finite Field]"){
 	// The setup is repeated before running each section
 	std::array<u32, 3> p_array = {13, 2546604103, 3998191247};
@@ -94,4 +100,23 @@ TEST_CASE("First Test", "[Finite Field]"){
 		
 	}
 
+	SECTION("Multiplication"){
+
+		for(u32 p: p_array){
+			
+			ff_multiply_test<<<1,128>>>(p, d_a, d_b, d_c);
+			cudaDeviceSynchronize();
+			cudaMemcpy(c.data(), d_c, number_of_values*sizeof(u32), cudaMemcpyDeviceToHost);
+
+			nmod_t modulus = {0};
+			nmod_init(&modulus, p);
+
+			for(size_t i = 0; i < number_of_values; i++){
+				INFO("p = "<<p<<", a = "<<a.at(i)<<", b = "<<b.at(i)<<", c = "<<c[i]);
+				CHECK(c[i] == nmod_mul(a.at(i)%p, b.at(i)%p, modulus));
+			}
+
+		}
+		
+	}
 }
