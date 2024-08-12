@@ -156,4 +156,35 @@ TEST_CASE("First Test", "[Finite Field]"){
 
 		}
 	}
+
+	SECTION("Division"){
+
+		for(u32 p: p_array){
+
+			std::uniform_int_distribution<u32> dist {1, p-1};
+
+			auto generator = [&](){
+				return dist(mersenne_engine);
+			};
+
+			std::generate(a.begin(), a.end(), generator);
+			std::generate(b.begin(), b.end(), generator);
+
+			cudaMemcpy(d_a, a.data(), number_of_values*sizeof(u32), cudaMemcpyHostToDevice);
+			cudaMemcpy(d_b, b.data(), number_of_values*sizeof(u32), cudaMemcpyHostToDevice);
+
+			ff_divide_test<<<1,128>>>(p, d_a, d_b, d_c);
+			cudaDeviceSynchronize();
+			cudaMemcpy(c.data(), d_c, number_of_values*sizeof(u32), cudaMemcpyDeviceToHost);
+
+			nmod_t modulus = {0};
+			nmod_init(&modulus, p);
+
+			for(size_t i = 0; i < number_of_values; i++){
+				INFO("p = "<<p<<", a = "<<a.at(i)<<", b = "<<b.at(i)<<", c = "<<c[i]);
+				REQUIRE(c[i] == nmod_div(a.at(i)%p, b.at(i)%p, modulus));
+			}
+
+		}
+	}
 }
