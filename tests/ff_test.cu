@@ -218,4 +218,9 @@ TEST_CASE("First Test", "[Finite Field]"){
 
 		}
 	}
+
+	cudaFree(d_a);
+	cudaFree(d_b);
+	cudaFree(d_c);
+
 }
