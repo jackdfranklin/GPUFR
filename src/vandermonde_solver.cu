@@ -50,3 +50,30 @@ void extract_master_poly_coefficients(u32 n, u32 *v, u32 p, u32 *c_out){
 	cudaFree(c_in);
 
 }
+
+__global__ void solve_transposed_vandermonde(u32 n, u32 *v, u32 *c, u32 *f, u32 p, u32 *c_out){
+	i64 idx = threadIdx.x + blockIdx.x * blockDim.x;
+	
+	u32 t = 1;
+	u32 b = 1;
+	u32 s = f[n - 1];
+
+	for(size_t j = n - 1; j > 0; j--){
+		b = ff_add(c[j], ff_multiply(v[idx], b, p), p);
+		s = ff_add(s, ff_multiply(f[j - 1], b, p), p);
+		t = ff_add(ff_multiply(v[idx], t, p), b, p);
+	}
+
+	c_out[idx] = ff_divide(ff_divide(s, t, p), v[idx], p);
+}
+
+void interpolate(u32 n, u32 *d_v, u32 *d_f, u32 p, u32 *d_c_out){
+
+	u32 *d_c;
+	cudaMalloc(&d_c, n*sizeof(u32));
+	extract_master_poly_coefficients(n, d_v, p, d_c);
+
+	solve_transposed_vandermonde<<<1, n>>>(n, d_v, d_c, d_f, p, d_c_out);
+
+	cudaFree(d_c);
+} 

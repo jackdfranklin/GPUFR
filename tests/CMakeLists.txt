@@ -22,7 +22,13 @@ target_link_libraries(vm_test PRIVATE gpufr Catch2::Catch2WithMain ${FLINT_LINK_
 target_include_directories(vm_test PRIVATE ${FLINT_INCLUDE_DIRS})
 set_target_properties(vm_test PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
+add_executable(ui_test univariate_interpolation_test.cu)
+target_link_libraries(ui_test PRIVATE gpufr Catch2::Catch2WithMain ${FLINT_LINK_LIBRARIES})
+target_include_directories(ui_test PRIVATE ${FLINT_INCLUDE_DIRS})
+set_target_properties(ui_test PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+
 # Register tests for ctest/make test to run
 add_test(NAME CudaTest COMMAND cuda_test) # Command can be a target
 add_test(NAME FiniteFieldTest COMMAND ff_test) 
 add_test(NAME VandermondeSolverTest COMMAND vm_test)
+add_test(NAME UnivariateInterpolationTest COMMAND ui_test)
