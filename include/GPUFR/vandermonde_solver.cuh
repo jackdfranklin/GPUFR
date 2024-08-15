@@ -9,5 +9,5 @@ __global__ void master_poly_coefficient_iter(u32 n, u32 i, u32 *v, u32 *c_in, u3
 
 void extract_master_poly_coefficients(u32 n, u32 *v, u32 p, u32 *c_out);
 
-void interpolate(u32 n, u32 *d_v, u32 *d_f, u32 p, u32 *d_c);
+void solve_transposed_vandermonde(u32 n, u32 *d_v, u32 *d_f, u32 p, u32 *d_c);
 

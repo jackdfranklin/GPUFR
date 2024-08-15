@@ -26,14 +26,14 @@ u32 evaluate_poly(u32 z, const std::vector<u32> &coefficients, nmod_t mod){
 	return result;
 }
 
-TEST_CASE("Univariate Polynomial Interpolation"){
+TEST_CASE("Univariate Polynomial Interpolation", "[Interpolation][Vandermonde]"){
 	
 	u32 p = GENERATE(2546604103, 3998191247);
 	INFO("p = "<<p);
 	nmod_t mod = {0};
 	nmod_init(&mod, p);
 
-	u32 number_of_values = 8;
+	u32 number_of_values = 128;
 
 	// Probe points need to be powers of the anchor point
 	u32 anchor_point = GENERATE_COPY(take(1, random((u32)1, p-1)));
@@ -68,7 +68,7 @@ TEST_CASE("Univariate Polynomial Interpolation"){
 	u32 *d_c;
 	cudaMalloc(&d_c, number_of_values*sizeof(u32));
 	cudaDeviceSynchronize();
-	interpolate(number_of_values, d_v, d_f, p, d_c);
+	solve_transposed_vandermonde(number_of_values, d_v, d_f, p, d_c);
 	cudaDeviceSynchronize();
 
 
@@ -84,8 +84,7 @@ TEST_CASE("Univariate Polynomial Interpolation"){
 
 	SECTION("Polynomial should evaluate probes correctly"){
 		for(size_t i = 0; i < number_of_values; i++){
-			INFO("z = "<<v.at(i));
-			INFO("f = "<<f.at(i));
+			INFO("z["<<i<<"] = "<<v.at(i));
 			REQUIRE(evaluate_poly(v.at(i), c, mod) == f.at(i)); 
 		}
 	}

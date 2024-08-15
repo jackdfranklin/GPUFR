@@ -55,7 +55,7 @@ u32 product_expansion(u32 z, const std::vector<u32> &v, nmod_t mod){
 	return result;
 }
 
-TEST_CASE("Solving Vandermonde Systems", "[Interpolation]"){
+TEST_CASE("Solving Vandermonde Systems", "[Interpolation][Vandermonde]"){
 	
 	u32 p = GENERATE(13, 2546604103, 3998191247);
 	INFO("p = "<<p);
