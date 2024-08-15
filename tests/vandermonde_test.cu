@@ -4,6 +4,7 @@
 #include <vector>
 #include <algorithm>
 #include <random>
+#include <sstream>
 
 #include <cuda.h>
 #include <cuda_runtime.h>
@@ -13,6 +14,8 @@
 #include <flint/nmod.h>
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators_adapters.hpp>
+#include <catch2/generators/catch_generators_random.hpp>
 
 std::vector<u32> master_poly_coefficients_function(const std::vector<u32> &v, nmod_t mod){
 	
@@ -32,71 +35,78 @@ std::vector<u32> master_poly_coefficients_function(const std::vector<u32> &v, nm
 	return c;
 }
 
-void master_poly_coefficients_iterate(u32 i, const std::vector<u32> &v, std::vector<u32> &c, nmod_t mod){
-
-	for(size_t j = v.size() - 1 - i; j < v.size() - 1; j++){
-		c[j] = nmod_sub(c[j], nmod_mul(v.at(i), c.at(j + 1), mod), mod);
+u32 evaluate_master_polynomial(u32 z, const std::vector<u32> &c, nmod_t mod){
+	u32 result = c.at(0);
+	for(size_t i = 1; i < c.size(); i++){
+		result = nmod_add(result, nmod_mul(c.at(i), nmod_pow_ui(z, i, mod), mod), mod); 
 	}
 
-	c[v.size() - 1] = nmod_sub(c[v.size() - 1], v.at(i), mod);
+	result = nmod_add(result, nmod_pow_ui(z, c.size(), mod), mod); //Coefficient for largest power is always 1
+
+	return result;
+}
+
+u32 product_expansion(u32 z, const std::vector<u32> &v, nmod_t mod){
+	u32 result = 1;
+	for(size_t i = 0; i < v.size(); i++){
+		result = nmod_mul(result, nmod_sub(z, v.at(i), mod), mod);
+	}
+
+	return result;
 }
 
 TEST_CASE("Solving Vandermonde Systems", "[Interpolation]"){
 	
-	std::random_device rand_device;
-	std::mt19937 mersenne_engine {rand_device()};
-	std::uniform_int_distribution<u32> dist {0, UINT32_MAX};
+	u32 p = GENERATE(13, 2546604103, 3998191247);
+	INFO("p = "<<p);
+	u32 number_of_values = GENERATE(64, 128);
+	INFO("n = "<<number_of_values);
 
-	u32 p = 2546604103;
+	auto v = GENERATE_COPY(take(5, chunk(number_of_values, random((u32)0, p-1))));
 
-	auto generator = [&](){
-		return dist(mersenne_engine)%p;
-	};
+	std::stringstream v_string;
+	for(auto vi: v){
+		v_string<<vi<<" ";
+	}
 
-	u32 number_of_values = 4;
-	std::vector<u32> v(number_of_values);
+	INFO("v = "<<v_string.str());
 
-	std::generate(v.begin(), v.end(), generator);
-
-	u32 *d_v, *d_c_in, *d_c;
+	u32 *d_v, *d_c;
 
 	cudaMalloc(&d_v, number_of_values*sizeof(u32));
-	cudaMalloc(&d_c_in, number_of_values*sizeof(u32));
 	cudaMalloc(&d_c, number_of_values*sizeof(u32));
 
 	cudaMemcpy(d_v, v.data(), number_of_values*sizeof(u32), cudaMemcpyHostToDevice);
 
-
 	nmod_t mod = {0};
 	nmod_init(&mod, p);
+	std::vector<u32> c_reference = master_poly_coefficients_function(v, mod);
 
-	std::vector<u32> c_reference(number_of_values);
-	c_reference[number_of_values - 1] = nmod_sub(0, v.at(0), mod);
-
-	cudaMemcpy(d_c_in, c_reference.data(), number_of_values*sizeof(u32), cudaMemcpyHostToDevice);
-	cudaDeviceSynchronize();
-
-	//INFO("Copying Coefficients From Device To Host...");
 	std::vector<u32> c(number_of_values);
+	extract_master_poly_coefficients(number_of_values, d_v, p, d_c);
+	cudaMemcpy(c.data(), d_c, number_of_values*sizeof(u32), cudaMemcpyDeviceToHost);
 
-	for(size_t i = 1; i < number_of_values; i++){
-		master_poly_coefficients_iterate(i, v, c_reference, mod);
+	std::stringstream c_string;
+	for(auto ci: c){
+		c_string<<ci<<" ";
+	}
 
-		master_poly_coefficient_iter<<<1, number_of_values>>>(number_of_values, i, d_v, d_c_in, p, d_c);
-		cudaMemcpy(c.data(), d_c, number_of_values*sizeof(u32), cudaMemcpyDeviceToHost);
+	INFO("c = "<<c_string.str());
+
+	SECTION("Same coefficients calculated on GPU and CPU"){
 		for(size_t j = 0; j < number_of_values; j++){
-			INFO("i = "<<i);
 			INFO("j = "<<j);
 			REQUIRE(c.at(j) == c_reference.at(j));
 		}
+	}
 
-		u32 *temp = d_c_in;
-		d_c_in = d_c;
-		d_c = temp;
+	SECTION("Evaluation of master polynomial is correct"){
+		auto z = GENERATE_COPY(take(10, random((u32)1, p-1)));
+		INFO("z = "<<z);
+		REQUIRE(product_expansion(z, v, mod) == evaluate_master_polynomial(z, c, mod));	
 	}
 
 	cudaFree(d_v);
-	cudaFree(d_c_in);
 	cudaFree(d_c);
 
 }
