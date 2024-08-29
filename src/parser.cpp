@@ -17,6 +17,10 @@ std::string cuda_from_expression(const std::string &expression, const std::vecto
 	}
 	program_string<<"u32 p){\n";
 
+	program_string<<"return ";
+	program_string<<postfix_to_ff(parse_expression(expression))<<";\n";
+	program_string<<"}";
+
 	return program_string.str();
 }
 
@@ -126,6 +130,51 @@ bool right_assoc(const std::string &token){
 	return (token == "^");
 }
 
+std::string postfix_to_ff(const std::vector<std::string> &rpn){
+	std::stack<std::string> S;
+	for(auto token: rpn){
+		if(!is_operator(token)){
+			S.push(token);
+		}
+		else{
+			std::string R = S.top();
+			S.pop();
+			std::string L = S.top();
+			S.pop();
+
+			S.push(operator_to_function(token, L, R));
+		}
+	}
+
+	return S.top();
+	
+}
+
+std::string operator_to_function(const std::string &op, const std::string &L, const std::string &R){
+	std::string function_name;
+
+		if(op == "+"){ 
+			function_name = "ff_add";
+		} else
+		if(op == "-"){ 
+			function_name = "ff_subtract";
+		} else
+		if(op == "*"){ 
+			function_name = "ff_multiply";
+		} else
+		if(op == "/"){ 
+			function_name = "ff_divide";
+		} else
+		if(op == "^"){ 
+			function_name = "ff_pow";
+		}
+		else{
+			function_name = "invalid_op_"+op;
+		}
+
+	return function_name+"("+L+", "+R+", p)";
+}
+
 std::string postfix_to_infix(const std::vector<std::string> &rpn){
 	std::stack<std::string> S;
 	for(auto token: rpn){
@@ -141,12 +190,6 @@ std::string postfix_to_infix(const std::vector<std::string> &rpn){
 			S.push(L+token+R);
 		}
 	}
-	
-	std::string infix;
-	while(!S.empty()){
-		infix += S.top();
-		S.pop();
-	}
 
-	return infix;
+	return S.top();
 }
