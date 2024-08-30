@@ -17,6 +17,8 @@ int precedence(const std::string &token);
 
 bool right_assoc(const std::string &token);
 
+bool should_pop(const std::string &token, const std::string &top_op);
+
 std::string postfix_to_ff(const std::vector<std::string> &rpn);
 
 std::string operator_to_function(const std::string &op, const std::string &L, const std::string &R);

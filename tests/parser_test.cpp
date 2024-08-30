@@ -57,8 +57,8 @@ TEST_CASE("Parser Test", "[Parsing][Evaluation]"){
 
 	SECTION("Conversion from operator to function is correct"){
 
-		const std::string expression = "3+x^2+7*x^3";
-		const std::string ff_expression = "ff_add(ff_add(3, ff_pow(x, 2, p), p), ff_multiply(7, ff_pow(x, 3, p), p), p)";
+		const std::string expression = "3+x^2+7*x^3*y^2";
+		const std::string ff_expression = "ff_add(ff_add(3, ff_pow(x, 2, p), p), ff_multiply(ff_multiply(7, ff_pow(x, 3, p), p), ff_pow(y, 2, p), p), p)";
 
 		std::vector<std::string> rpn = parse_expression(expression);
 

@@ -68,7 +68,7 @@ std::vector<std::string> parse_expression( const std::string &expression ){
 				operator_stack.push(token);
 			} 
 			else {
-				while(!operator_stack.empty()){
+				while(!operator_stack.empty() && should_pop(token, operator_stack.top())){
 					rpn_expression.push_back(operator_stack.top());
 					operator_stack.pop();
 				}
@@ -153,6 +153,10 @@ int precedence(const std::string &token){
 
 bool right_assoc(const std::string &token){
 	return (token == "^");
+}
+
+bool should_pop(const std::string &token, const std::string &top_op){
+	return (precedence(token) < precedence(top_op)) || (precedence(token) == precedence(top_op) && !right_assoc(token));
 }
 
 std::string postfix_to_ff(const std::vector<std::string> &rpn){
