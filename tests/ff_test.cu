@@ -1,5 +1,5 @@
 #include "GPUFR/ff_math.cuh"
-#include "GPUFR/types.h"
+#include "GPUFR/types.hpp"
 
 #include <array>
 #include <vector>

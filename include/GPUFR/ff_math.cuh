@@ -1,6 +1,6 @@
 #pragma once
 
-#include "GPUFR/types.h"
+#include "GPUFR/types.hpp"
 
 __device__ u32 ff_add(u32 a, u32 b, u32 p);
 
