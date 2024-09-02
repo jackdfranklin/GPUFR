@@ -1,6 +1,5 @@
 #include "GPUFR/parser.hpp"
 #include "GPUFR/types.hpp"
-#include "GPUFR/nvrtc_helper.hpp"
 
 #include <array>
 #include <vector>
@@ -10,10 +9,6 @@
 #include <random>
 #include <sstream>
 #include <filesystem>
-
-#include <nvrtc.h>
-#include <cuda.h>
-#include <cuda_runtime.h>
 
 #include <flint/flint.h>
 #include <flint/nmod_types.h>
