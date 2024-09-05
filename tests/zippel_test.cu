@@ -23,37 +23,45 @@ TEST_CASE("Multivariate polynomial interpolation using Zippel's algorithm"){
 	nmod_init(&mod, p);
 
 	SECTION("Monomial evaluation"){
-		u32 n_vars= GENERATE(take(1, random((u32)1, (u32)10)));
+		u32 n_vars= GENERATE(take(4, random((u32)1, (u32)10)));
+		size_t n_values = GENERATE(take(4, random((u32)32, (u32)128)));
 
-		std::vector<u32> exponents = GENERATE_COPY(take(1, chunk(128 * n_vars, random((u32)1, (u32)20))));
+		std::vector<u32> exponents = GENERATE_COPY(take(1, chunk(n_values * n_vars, random((u32)1, (u32)20))));
 		u32 *d_e;
-		cudaMalloc(&d_e, n_vars*128*sizeof(u32));
-		cudaMemcpy(d_e, exponents.data(), n_vars*128*sizeof(u32), cudaMemcpyHostToDevice);
+		size_t pitch = 0;
+		cudaMallocPitch(&d_e, &pitch, n_values*sizeof(u32), n_vars);
+		cudaMemcpy2D(d_e, pitch, exponents.data(), n_values*sizeof(u32), n_values*sizeof(u32), n_vars, cudaMemcpyHostToDevice);
+		//cudaMalloc(&d_e, n_vars*n_values*sizeof(u32));
+		//cudaMemcpy(d_e, exponents.data(), n_vars*n_values*sizeof(u32), cudaMemcpyHostToDevice);
 
 		std::vector<u32> anchor_points = GENERATE_COPY(take(1, chunk(n_vars, random((u32)2, p-1))));
 		u32 *d_a;
 		cudaMalloc(&d_a, n_vars*sizeof(u32));
 		cudaMemcpy(d_a, anchor_points.data(), n_vars*sizeof(u32), cudaMemcpyHostToDevice);
 		
-		std::vector<u32> reference(128);
-		for(size_t i = 0; i < 128; i++){
+		std::vector<u32> reference(n_values);
+		for(size_t i = 0; i < n_values; i++){
 			u32 r = 1;
 			for(size_t j = 0; j < n_vars; j++){
-				r = nmod_mul(r, nmod_pow_ui(anchor_points.at(j), exponents.at(i + 128*j), mod), mod);
+				r = nmod_mul(r, nmod_pow_ui(anchor_points.at(j), exponents.at(i + n_values*j), mod), mod);
 			}
 			reference.at(i) = r;
 		}
 
 		u32 *d_r;
-		cudaMalloc(&d_r, 128*sizeof(u32));
-		evaluate_monomials<<<1,128>>>(n_vars, 128, d_a, d_e, d_r, p);
+		cudaMalloc(&d_r, n_values*sizeof(u32));
+		evaluate_monomials<<<1,n_values>>>(n_vars, pitch/sizeof(u32), d_a, d_e, d_r, p);
 
-		std::vector<u32> result(128);
-		cudaMemcpy(result.data(), d_r, 128*sizeof(u32), cudaMemcpyDeviceToHost);
+		std::vector<u32> result(n_values);
+		cudaMemcpy(result.data(), d_r, n_values*sizeof(u32), cudaMemcpyDeviceToHost);
 
-		for(size_t i = 0; i < 128; i++){
+		for(size_t i = 0; i < n_values; i++){
 			REQUIRE(result.at(i) == reference.at(i));
 		}
+
+		cudaFree(d_e);
+		cudaFree(d_a);
+		cudaFree(d_r);
 		
 	}
 
