@@ -16,3 +16,16 @@ __global__ void evaluate_monomials(u32 n_variables, size_t pitch, u32 *anchor_po
 
 }
  
+__global__ void evaluate_powers(u32 n_variables, u32 max_power, u32 *anchor_points, u32 *result, u32 p){
+	
+	// x-direction corresponds to different powers
+	u32 idx = threadIdx.x + blockIdx.x * blockDim.x;
+	// y-direction corresponds to different variables
+	u32 idy = threadIdx.y + blockIdx.y * blockDim.y;
+
+	if(idx < max_power && idy < n_variables){
+		// Lowest power is 1
+		u32 power = idx + 1;
+		result[idx + max_power*idy] = ff_pow(anchor_points[idy], power, p);
+	}
+}
