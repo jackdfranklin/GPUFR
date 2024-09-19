@@ -1,43 +1,34 @@
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <cstdlib>
-#include <cuda.h>
-#include <math.h>
-#include <cuda_runtime.h>
-#include <vector>
-#include <cmath>
-#include <sstream>
-#include <iomanip> 
+#include "GPUFR/lagrange_solver.cuh"
 
-#include "cuda_safe_call.hpp"
-#include "FiniteField.cuh"
-
-#define MAX_VARS 5 // The maximum number of variable to reconstruct over
+#define MAX_VARS 6 // The maximum number of variable to reconstruct over
 #define MAX_EXPONENT 20 // The maximum exponent in the polynomeal
 #define UNSIGNED_TYPE unsigned
-#define PRIME 105097565 // Must be less than (max unsigend) / 2
+#define PRIME 105097513 // Must be less than (max unsigend) / 2
 
-__device__ FiniteField<UNSIGNED_TYPE> fun(FiniteField<UNSIGNED_TYPE> *vars)
+__host__ __device__ int as_int(u32 val)
 {
-    FiniteField<UNSIGNED_TYPE> result;
-    result.set_prime(PRIME);
-    result = 1;
+    int result = val;
+    if (result > PRIME/2) result = result - PRIME;
     return result;
 }
 
-__global__ void compute_probes(const FiniteField<UNSIGNED_TYPE> *xs, FiniteField<UNSIGNED_TYPE> *probes, FiniteField<UNSIGNED_TYPE> *probes_2, int n_vars, int n_samps) {
+__device__ u32 fun(u32 *vars)
+{
+    u32 result;
+    result = 1;
+    printf("xs: %i ys: %i \n", vars[0], result);
+    return result;
+}
+
+__global__ void compute_probes(const u32 *xs, u32 *probes, u32 *probes_2, int n_vars, int n_samps) {
     int i = blockDim.x * blockIdx.x + threadIdx.x;
 
-    FiniteField<UNSIGNED_TYPE> test_params[MAX_VARS];
-    probes[i].set_prime(PRIME);
-    probes_2[i].set_prime(PRIME);
+    u32 test_params[MAX_VARS];
 
     for (int j=0; j<n_vars; j++)
     {
         float ifloat = i;
         int dimension_index = static_cast<int>(floorf(ifloat/pow(n_samps, j))) % n_samps;//floorf((pow(n_samps, j)));
-        test_params[j].set_prime(PRIME);
         test_params[j] = xs[j*n_samps+dimension_index];
     }
         
@@ -46,27 +37,25 @@ __global__ void compute_probes(const FiniteField<UNSIGNED_TYPE> *xs, FiniteField
 }
 
 
-__device__ void atomic_add(FiniteField<UNSIGNED_TYPE> *l_val, FiniteField<UNSIGNED_TYPE> r_val)
+__device__ void atomic_add(u32 *l_val, u32 r_val)
 {
-    UNSIGNED_TYPE assumed, old;
-    FiniteField<UNSIGNED_TYPE> value;
-    value.set_prime(PRIME);
+    u32 assumed, old;
+    u32 value;
 
-    old = (*l_val).value();
+    old = (*l_val);
     do
     {
         value = *l_val;
         assumed = old;
-        old = atomicCAS(&((*l_val)._value), assumed, (value + r_val).value());
+        old = atomicCAS(&((*l_val)), assumed, ff_add(value, r_val, PRIME));
     } while (assumed != old);
 }
 
-__device__ FiniteField<UNSIGNED_TYPE> compute_denom_nd(int current_index, const FiniteField<UNSIGNED_TYPE> *xs, int dim, int n_vars, int n_samps, int idx)
+__device__ u32 compute_denom_nd(int current_index, const u32 *xs, int dim, int n_vars, int n_samps, int idx)
 {
     int flat_current_index = dim*n_samps + static_cast<int>(floorf(idx/pow(n_samps, dim)))%n_samps;
 
-    FiniteField<UNSIGNED_TYPE> denom;
-    denom.set_prime(PRIME);
+    u32 denom;
     denom = 1;
 
     for (int i=0; i<n_samps; i++)
@@ -74,24 +63,26 @@ __device__ FiniteField<UNSIGNED_TYPE> compute_denom_nd(int current_index, const 
         int flat_index = dim*n_samps + i;
         if (flat_index != flat_current_index)
         {
-            denom = denom*(xs[flat_current_index] - xs[flat_index]);
+            denom = ff_multiply(denom, (ff_subtract(xs[flat_current_index],  xs[flat_index], PRIME)), PRIME);
         }
     }
+
+    int pDenom = denom;
+    if (denom > PRIME/2) pDenom = denom - PRIME;
+    printf("idx: %i denom: %i \n", flat_current_index, pDenom);
 
     return denom;
 }
 
-__global__ void get_lagrange_coeffs_nd(const FiniteField<UNSIGNED_TYPE> *xs, FiniteField<UNSIGNED_TYPE> *ys, FiniteField<UNSIGNED_TYPE> *out, FiniteField<UNSIGNED_TYPE> *lagrange, int dim, int n_vars, int n_samps)
+__global__ void get_lagrange_coeffs_nd(const u32 *xs, u32 *ys, u32 *out, u32 *lagrange, int dim, int n_vars, int n_samps)
 {
     // Computes the coefficients to the Lagrange polynomials and writes them to ys
 
     int idx = threadIdx.x + blockIdx.x * blockDim.x;
-    FiniteField<UNSIGNED_TYPE> denom;
-    denom.set_prime(PRIME);
+    u32 denom;
     denom = compute_denom_nd(idx, xs, dim, n_vars, n_samps, idx);
 
-    FiniteField<UNSIGNED_TYPE> coefficient = ys[idx] / denom;
-    ys[idx] = 0;
+    u32 coefficient = ff_divide(ys[idx], denom, PRIME);
 
     int index_step_ys = pow(n_samps, dim);
     int power = static_cast<int>(floorf(pow(n_samps, dim+1)));
@@ -103,13 +94,16 @@ __global__ void get_lagrange_coeffs_nd(const FiniteField<UNSIGNED_TYPE> *xs, Fin
     {
         int flat_index_ys = start_index_ys+i*index_step_ys;
         int flat_index_lagrange = index_xs*n_samps + i;
-        // printf("idx: %i i: %i probe index: %i start index: %i to add: %i denom: %i lagind: %i val: %i \n", idx, i, flat_index_ys, power, coefficient.value(), denom.value(), flat_index_lagrange, (lagrange[flat_index_lagrange]*coefficient).value());
-        atomic_add(&out[flat_index_ys], lagrange[flat_index_lagrange]*coefficient);
+        printf("idx: %i i: %i probe index: %i start index: %i to add: %i denom: %i lag: %i val: %i y: %i \n", idx, i, flat_index_ys, power, as_int(coefficient), as_int(denom), as_int(lagrange[flat_index_lagrange]), as_int(ff_multiply(ff_divide(lagrange[flat_index_lagrange], denom, PRIME), ys[i], PRIME)), ys[idx]);
+        atomic_add(&out[flat_index_ys], ff_multiply(ff_divide(lagrange[flat_index_lagrange], denom, PRIME), ys[i], PRIME));
     }
+
+    ys[idx] = 0;
+
 }
 
 
-void convolve_cpp(const FiniteField<UNSIGNED_TYPE> *kernel, const FiniteField<UNSIGNED_TYPE> *signal, FiniteField<UNSIGNED_TYPE> *out, int kernel_size, int signal_size)
+void convolve_cpp(const u32 *kernel, const u32 *signal, u32 *out, int kernel_size, int signal_size)
 {
     int result_size = signal_size+kernel_size-1;
     int pad_size = kernel_size-1;
@@ -120,26 +114,17 @@ void convolve_cpp(const FiniteField<UNSIGNED_TYPE> *kernel, const FiniteField<UN
         {
             if (i+j >= pad_size && i+j-pad_size < signal_size)
             {
-                out[i] += kernel[kernel_size - 1 - j] * signal[i+j-pad_size];
+                out[i] = ff_add(out[i], ff_multiply(kernel[kernel_size - 1 - j], signal[i+j-pad_size], PRIME), PRIME);
             }
         }
     }
 }
 
-void compute_lagrange_pol(const FiniteField<UNSIGNED_TYPE> *xs, FiniteField<UNSIGNED_TYPE>* lagrange, int dim, int n_vars, int n_samps)
+void compute_lagrange_pol(const u32 *xs, u32 *lagrange, int dim, int n_vars, int n_samps)
 {
-    FiniteField<UNSIGNED_TYPE> root_arr[2];
-    FiniteField<UNSIGNED_TYPE> tmp[MAX_VARS];
-    FiniteField<UNSIGNED_TYPE> tmp2[MAX_VARS];
-
-    root_arr[0].set_prime(PRIME);
-    root_arr[1].set_prime(PRIME);
-
-    for (int i=0; i<n_samps; i++)
-    {
-        tmp[i].set_prime(PRIME);
-        tmp2[i].set_prime(PRIME);
-    }
+    u32 root_arr[2];
+    u32 tmp[MAX_VARS];
+    u32 tmp2[MAX_VARS];
 
     // Loop over each x to get l(x, xi)
     for (int i=0; i<n_samps; i++)
@@ -158,7 +143,7 @@ void compute_lagrange_pol(const FiniteField<UNSIGNED_TYPE> *xs, FiniteField<UNSI
 
             if (i != j)
             {
-                root_arr[0] = 0-xs[x_index];
+                root_arr[0] = ff_subtract(0, xs[x_index], PRIME);
                 root_arr[1] = 1;
 
                 convolve_cpp(tmp, root_arr, tmp2, n_samps, 2);
@@ -176,8 +161,11 @@ void compute_lagrange_pol(const FiniteField<UNSIGNED_TYPE> *xs, FiniteField<UNSI
             int x_index = dim*n_samps + i;
             int lagrange_index = x_index*n_samps + j;
 
-            lagrange[lagrange_index].set_prime(PRIME);
             lagrange[lagrange_index] = tmp[j];
+
+            int pLag = tmp[j];
+            if (pLag > PRIME/2) pLag = tmp[j] - PRIME;
+            printf("idx: %i term: %i expansion: %i \n", i, j, pLag);
         }
     }
 }
@@ -190,6 +178,7 @@ std::string nd_poly_to_string_flat(const std::vector<double>& coef_flat, const s
     for (size_t i = 0; i < coef_flat.size(); ++i) {
         double c = coef_flat[i];
         if (sqrt(pow(c, 2)) >= 1) {
+            c = c > PRIME/2.0 ? c-PRIME : c;
             result << (c > 0 && result.tellp() > 0 ? "+ " : "") << std::fixed << std::setprecision(0) << c;
             for (int j = 0; j < dim; ++j) {
                 int power = static_cast<int>(std::floor(i / std::pow(n_samps, j))) % n_samps;
@@ -207,27 +196,26 @@ std::string nd_poly_to_string_flat(const std::vector<double>& coef_flat, const s
 void multi_interp(int n_vars, int n_samps)
 {
     int probe_len = pow(n_samps, n_vars);
-    FiniteField<UNSIGNED_TYPE> lagrange_polynomials[n_vars*n_samps*n_samps];
+    u32 lagrange_polynomials[n_vars*n_samps*n_samps];
 
-    FiniteField<UNSIGNED_TYPE> probes[probe_len];
-    FiniteField<UNSIGNED_TYPE> xs[n_vars*n_samps];
+    u32 probes[probe_len];
+    u32 xs[n_vars*n_samps];
     for (int i=0; i<n_vars; i++)
     {
         for (int j=0; j<n_samps; j++)
         {
             int flat_index = i*n_samps + j;
-            xs[flat_index].set_prime(PRIME);
-            xs[flat_index] = (j+1);
-            // printf("xs: %i \n", (j+1));
+            xs[flat_index] = (j+1)%PRIME;
+            printf("xs: %i \n", (j+1));
         }
     }
 
-    FiniteField<UNSIGNED_TYPE> *d_xs, *d_probes, *d_probes_2, *d_lagrange;
+    u32 *d_xs, *d_probes, *d_probes_2, *d_lagrange;
 
     // Size in bytes for each vector
-    size_t bytes_xs = n_vars*n_samps * sizeof(FiniteField<UNSIGNED_TYPE>);
-    size_t bytes_probes = probe_len * sizeof(FiniteField<UNSIGNED_TYPE>);
-    size_t bytes_lagrange = n_vars*n_samps*n_samps * sizeof(FiniteField<UNSIGNED_TYPE>);
+    size_t bytes_xs = n_vars*n_samps * sizeof(u32);
+    size_t bytes_probes = probe_len * sizeof(u32);
+    size_t bytes_lagrange = n_vars*n_samps*n_samps * sizeof(u32);
 
     cudaSetDevice(1);
 
@@ -255,24 +243,20 @@ void multi_interp(int n_vars, int n_samps)
 
 
     // Perform multidimensional interpolation
-    for (int i=0; i<1; i++)
+    for (int i=0; i<n_vars; i++)
     {
         get_lagrange_coeffs_nd<<<blocksPerGrid, threadsPerBlock>>>(d_xs, d_probes, d_probes_2, d_lagrange, i, n_vars, n_samps);
         std::swap(d_probes, d_probes_2);
     }
 
-    CUDA_SAFE_CALL(cudaDeviceSynchronize());
+    cudaDeviceSynchronize();
     cudaMemcpy(probes, d_probes, bytes_probes, cudaMemcpyDeviceToHost);
 
     std::vector<double> probe_vec(probe_len);
     for (int i=0; i<probe_len; i++)
     {
-        std::cout << probes[i].value() << " ";
-        if (probes[i].value() > 105097565)
-        {
-            
-        }
-        probe_vec[i] = probes[i].value();
+        std::cout << "probe: " << probes[i] << " ";
+        probe_vec[i] = probes[i];
     }
 
 
@@ -281,10 +265,10 @@ void multi_interp(int n_vars, int n_samps)
     //     if (i%n_samps == 0) {
     //         std::cout << std::endl;
     //     }
-    //     if ((lagrange_polynomials[i]).value() > PRIME / 2){
-    //         std::cout << (lagrange_polynomials[i]).value() - long(PRIME) << " ";
+    //     if (lagrange_polynomials[i] > PRIME / 2){
+    //         std::cout << lagrange_polynomials[i] - long(PRIME) << " ";
     //     } else {
-    //         std::cout << (lagrange_polynomials[i]).value() << " ";
+    //         std::cout << lagrange_polynomials[i] << " ";
     //     }
 
     // }
@@ -301,8 +285,8 @@ void multi_interp(int n_vars, int n_samps)
 
 }
 
-int main()
-{
-    multi_interp(3, 6);
-    return 0;
-}
+// int main()
+// {
+//     multi_interp(3, 6);
+//     return 0;
+// }
