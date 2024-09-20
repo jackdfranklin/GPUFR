@@ -15,8 +15,7 @@ __host__ __device__ int as_int(u32 val)
 __device__ u32 fun(u32 *vars)
 {
     u32 result;
-    result = 1;
-    printf("xs: %i ys: %i \n", vars[0], result);
+    result = vars[0] + vars[1] + ff_multiply(vars[0], vars[1], PRIME);
     return result;
 }
 
@@ -67,10 +66,6 @@ __device__ u32 compute_denom_nd(int current_index, const u32 *xs, int dim, int n
         }
     }
 
-    int pDenom = denom;
-    if (denom > PRIME/2) pDenom = denom - PRIME;
-    printf("idx: %i denom: %i \n", flat_current_index, pDenom);
-
     return denom;
 }
 
@@ -94,8 +89,8 @@ __global__ void get_lagrange_coeffs_nd(const u32 *xs, u32 *ys, u32 *out, u32 *la
     {
         int flat_index_ys = start_index_ys+i*index_step_ys;
         int flat_index_lagrange = index_xs*n_samps + i;
-        printf("idx: %i i: %i probe index: %i start index: %i to add: %i denom: %i lag: %i val: %i y: %i \n", idx, i, flat_index_ys, power, as_int(coefficient), as_int(denom), as_int(lagrange[flat_index_lagrange]), as_int(ff_multiply(ff_divide(lagrange[flat_index_lagrange], denom, PRIME), ys[i], PRIME)), ys[idx]);
-        atomic_add(&out[flat_index_ys], ff_multiply(ff_divide(lagrange[flat_index_lagrange], denom, PRIME), ys[i], PRIME));
+        printf("idx: %i i: %i probe index: %i start index: %i to add: %i denom: %i lag: %i val: %i y: %i \n", idx, i, flat_index_ys, power, as_int(coefficient), as_int(denom), as_int(lagrange[flat_index_lagrange]), as_int(ff_multiply(ff_divide(lagrange[flat_index_lagrange], denom, PRIME), ys[idx], PRIME)), ys[idx]);
+        atomic_add(&out[flat_index_ys], ff_multiply(ff_divide(lagrange[flat_index_lagrange], denom, PRIME), ys[idx], PRIME));
     }
 
     ys[idx] = 0;
@@ -206,7 +201,6 @@ void multi_interp(int n_vars, int n_samps)
         {
             int flat_index = i*n_samps + j;
             xs[flat_index] = (j+1)%PRIME;
-            printf("xs: %i \n", (j+1));
         }
     }
 
