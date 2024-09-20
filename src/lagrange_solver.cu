@@ -1,7 +1,7 @@
 #include "GPUFR/lagrange_solver.cuh"
 
 #define MAX_VARS 6 // The maximum number of variable to reconstruct over
-#define MAX_EXPONENT 20 // The maximum exponent in the polynomeal
+#define MAX_EXPONENT 101 // The maximum exponent in the polynomeal
 #define UNSIGNED_TYPE unsigned
 #define PRIME 105097513 // Must be less than (max unsigend) / 2
 
@@ -15,7 +15,7 @@ __host__ __device__ int as_int(u32 val)
 __device__ u32 fun(u32 *vars)
 {
     u32 result;
-    result = vars[0] + vars[1] + ff_multiply(vars[0], vars[1], PRIME);
+    result = vars[0];
     return result;
 }
 
@@ -89,7 +89,7 @@ __global__ void get_lagrange_coeffs_nd(const u32 *xs, u32 *ys, u32 *out, u32 *la
     {
         int flat_index_ys = start_index_ys+i*index_step_ys;
         int flat_index_lagrange = index_xs*n_samps + i;
-        printf("idx: %i i: %i probe index: %i start index: %i to add: %i denom: %i lag: %i val: %i y: %i \n", idx, i, flat_index_ys, power, as_int(coefficient), as_int(denom), as_int(lagrange[flat_index_lagrange]), as_int(ff_multiply(ff_divide(lagrange[flat_index_lagrange], denom, PRIME), ys[idx], PRIME)), ys[idx]);
+        // printf("idx: %i i: %i probe index: %i start index: %i to add: %i denom: %i lag: %i val: %i y: %i \n", idx, i, flat_index_ys, power, as_int(coefficient), as_int(denom), as_int(lagrange[flat_index_lagrange]), as_int(ff_multiply(ff_divide(lagrange[flat_index_lagrange], denom, PRIME), ys[idx], PRIME)), ys[idx]);
         atomic_add(&out[flat_index_ys], ff_multiply(ff_divide(lagrange[flat_index_lagrange], denom, PRIME), ys[idx], PRIME));
     }
 
@@ -118,8 +118,8 @@ void convolve_cpp(const u32 *kernel, const u32 *signal, u32 *out, int kernel_siz
 void compute_lagrange_pol(const u32 *xs, u32 *lagrange, int dim, int n_vars, int n_samps)
 {
     u32 root_arr[2];
-    u32 tmp[MAX_VARS];
-    u32 tmp2[MAX_VARS];
+    u32 tmp[MAX_EXPONENT];
+    u32 tmp2[MAX_EXPONENT];
 
     // Loop over each x to get l(x, xi)
     for (int i=0; i<n_samps; i++)
@@ -160,7 +160,7 @@ void compute_lagrange_pol(const u32 *xs, u32 *lagrange, int dim, int n_vars, int
 
             int pLag = tmp[j];
             if (pLag > PRIME/2) pLag = tmp[j] - PRIME;
-            printf("idx: %i term: %i expansion: %i \n", i, j, pLag);
+            // printf("idx: %i term: %i expansion: %i \n", i, j, pLag);
         }
     }
 }
@@ -195,12 +195,14 @@ void multi_interp(int n_vars, int n_samps)
 
     u32 probes[probe_len];
     u32 xs[n_vars*n_samps];
+    std::srand(time(0));
+
     for (int i=0; i<n_vars; i++)
     {
         for (int j=0; j<n_samps; j++)
         {
             int flat_index = i*n_samps + j;
-            xs[flat_index] = (j+1)%PRIME;
+            xs[flat_index] = (std::rand())%PRIME;
         }
     }
 
