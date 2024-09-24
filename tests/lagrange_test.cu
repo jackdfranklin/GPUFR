@@ -19,6 +19,6 @@
 
 TEST_CASE("Lagrange Interpolation"){
     printf("catch \n");
-    multi_interp(2, 100);
+    multi_interp(2, 128);
     REQUIRE(true);
 }

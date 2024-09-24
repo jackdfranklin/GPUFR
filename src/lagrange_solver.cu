@@ -1,5 +1,6 @@
 #include "GPUFR/lagrange_solver.cuh"
 
+// TODO: Make this dynamic
 #define MAX_VARS 6 // The maximum number of variable to reconstruct over
 #define MAX_EXPONENT 101 // The maximum exponent in the polynomeal
 #define UNSIGNED_TYPE unsigned
@@ -232,6 +233,7 @@ void multi_interp(int n_vars, int n_samps)
     // Compute the expanded lagrange polynomials in canonical form while GPU busy
     for (int i=0; i<n_vars; i++)
     {
+        // TODO: do on GPU
         compute_lagrange_pol(xs, lagrange_polynomials, i, n_vars, n_samps);
     }
 
