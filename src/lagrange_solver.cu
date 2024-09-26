@@ -13,6 +13,15 @@ __host__ __device__ int as_int(u32 val)
     return result;
 }
 
+__host__ __device__ void print_vec(u32* vec, int size)
+{
+    for (int i=0; i<size; i++)
+    {
+        printf("%i, ", as_int(vec[i]));
+    }
+    printf("\n");
+}
+
 __device__ u32 fun(u32 *vars)
 {
     u32 result;
@@ -70,11 +79,19 @@ __device__ u32 compute_denom_nd(int current_index, const u32 *xs, int dim, int n
     return denom;
 }
 
-__global__ void get_lagrange_coeffs_nd(const u32 *xs, u32 *ys, u32 *out, u32 *lagrange, int dim, int n_vars, int n_samps)
+__global__ void get_lagrange_coeffs_nd(const u32 *xs, u32 *ys, u32 *out, u32 *lagrange, int dim, int n_vars, int n_samps, int two_exponent)
 {
     // Computes the coefficients to the Lagrange polynomials and writes them to ys
 
     int idx = threadIdx.x + blockIdx.x * blockDim.x;
+    int pol_size = pow(2, two_exponent) + 1;
+    int step_size = 2*(n_samps-1) - pol_size;
+
+    if (idx == 1){
+    printf("pol_size: %i \n", pol_size);
+    printf("step_size: %i \n", step_size);
+    }
+
     u32 denom;
     denom = compute_denom_nd(idx, xs, dim, n_vars, n_samps, idx);
 
@@ -90,8 +107,9 @@ __global__ void get_lagrange_coeffs_nd(const u32 *xs, u32 *ys, u32 *out, u32 *la
     {
         int flat_index_ys = start_index_ys+i*index_step_ys;
         int flat_index_lagrange = index_xs*n_samps + i;
+        int actual_index_lagrange = step_size*(flat_index_lagrange/pol_size) + flat_index_lagrange;
         // printf("idx: %i i: %i probe index: %i start index: %i to add: %i denom: %i lag: %i val: %i y: %i \n", idx, i, flat_index_ys, power, as_int(coefficient), as_int(denom), as_int(lagrange[flat_index_lagrange]), as_int(ff_multiply(ff_divide(lagrange[flat_index_lagrange], denom, PRIME), ys[idx], PRIME)), ys[idx]);
-        atomic_add(&out[flat_index_ys], ff_multiply(ff_divide(lagrange[flat_index_lagrange], denom, PRIME), ys[idx], PRIME));
+        atomic_add(&out[flat_index_ys], ff_multiply(ff_divide(lagrange[actual_index_lagrange], denom, PRIME), ys[idx], PRIME));
     }
 
     ys[idx] = 0;
@@ -188,11 +206,110 @@ std::string nd_poly_to_string_flat(const std::vector<double>& coef_flat, const s
     return result.str();
 }
 
+// __device__ void convolve_gpu(u32* kernel, u32* signal, u32* out, int out_start_loc, int in_size)
+// {
+//     int result_size = in_size+in_size-1;
+//     int pad_size = in_size-1;
+//     for (int i=0; i<result_size; i++)
+//     {
+//         int out_indx = out_start_loc+i;
+//         out[out_indx] = 0;
+//         for (int j = 0; j < in_size; j++)
+//         {
+//             if (i+j >= pad_size && i+j-pad_size < in_size)
+//             {
+//                 out[out_indx] = ff_add(out[out_indx], ff_multiply(kernel[in_size - j], signal[i+j-pad_size], PRIME), PRIME);
+//             }
+//         }
+//     }
+// }
 
-void multi_interp(int n_vars, int n_samps)
+__device__ void convolve_gpu(const u32 *kernel, const u32 *signal, u32 *out, int kernel_size, int signal_size, int out_start_loc)
 {
+    int result_size = signal_size+kernel_size-1;
+    int pad_size = kernel_size-1;
+    for (int i=0; i<result_size; i++)
+    {
+        int out_indx = out_start_loc+i;
+        out[out_indx] = 0;
+        for (int j = 0; j < kernel_size; j++)
+        {
+            if (i+j >= pad_size && i+j-pad_size < signal_size)
+            {
+                out[out_indx] = ff_add(out[out_indx], ff_multiply(kernel[kernel_size - 1 - j], signal[i+j-pad_size], PRIME), PRIME);
+            }
+        }
+    }
+}
+
+__global__ void lagrange_convolution(u32 *lagrange, int level)
+{
+    int idx = threadIdx.x + blockIdx.x * blockDim.x;
+    int sub_pol_size = pow(2, level) + 1;
+    int step_size = pow(2, level+2);
+    int start_val_ker = idx*step_size;
+    int start_val_sig = idx*step_size + step_size/2;
+
+    int kernel_size = sub_pol_size+1;
+    int signal_size = sub_pol_size;
+
+    u32 *kernel = (u32*)malloc(kernel_size * sizeof(u32));
+    u32 *signal = (u32*)malloc(signal_size * sizeof(u32));
+    
+    for (int i=0; i<sub_pol_size; i++)
+    {
+        kernel[i] = lagrange[start_val_ker+i];
+        signal[i] = lagrange[start_val_sig+i];
+    }
+
+    if (idx == 0)
+    {
+        printf("level: %i \n", level);
+        print_vec(kernel, kernel_size);
+        print_vec(signal, signal_size);
+    }
+
+    kernel[sub_pol_size] = 0; // Padding for convolution
+
+    convolve_gpu(kernel, signal, lagrange, kernel_size, signal_size, start_val_ker);
+}
+
+__global__ void init_lagrange_branch_a(const u32* xs, u32* lagrange, int n_samps)
+{
+    int idx = threadIdx.x + blockIdx.x * blockDim.x;
+
+    int sub_pol_size = 2;
+    int start_index = idx*sub_pol_size;
+
+    int read_index = idx%(n_samps-1);
+    if (read_index < idx/(n_samps-1)) 
+    {
+        lagrange[start_index] = ff_subtract(0, xs[read_index], PRIME);
+        lagrange[start_index+1] = 1;
+    }
+}
+
+__global__ void init_lagrange_branch_b(const u32* xs, u32* lagrange, int n_samps)
+{
+    int idx = threadIdx.x + blockIdx.x * blockDim.x;
+
+    int sub_pol_size = 2;
+    int start_index = idx*sub_pol_size;
+
+    int read_index = idx%(n_samps-1);
+    if (read_index >= idx/(n_samps-1)) 
+    {
+        lagrange[start_index] = ff_subtract(0, xs[read_index + 1], PRIME);
+        lagrange[start_index+1] = 1;
+    }
+}
+
+void multi_interp(int n_vars, int two_exponent)
+{
+    int n_samps = pow(2, two_exponent) + 1;
     int probe_len = pow(n_samps, n_vars);
-    u32 lagrange_polynomials[n_vars*n_samps*n_samps];
+    int lagrange_size = n_vars*(n_samps-1)*n_samps*2;
+    u32 lagrange_polynomials[lagrange_size];
 
     u32 probes[probe_len];
     u32 xs[n_vars*n_samps];
@@ -203,7 +320,8 @@ void multi_interp(int n_vars, int n_samps)
         for (int j=0; j<n_samps; j++)
         {
             int flat_index = i*n_samps + j;
-            xs[flat_index] = (std::rand())%PRIME;
+            xs[flat_index] = (j+1)%PRIME;
+            // xs[flat_index] = (std::rand())%PRIME;
         }
     }
 
@@ -212,7 +330,7 @@ void multi_interp(int n_vars, int n_samps)
     // Size in bytes for each vector
     size_t bytes_xs = n_vars*n_samps * sizeof(u32);
     size_t bytes_probes = probe_len * sizeof(u32);
-    size_t bytes_lagrange = n_vars*n_samps*n_samps * sizeof(u32);
+    size_t bytes_lagrange = lagrange_size * sizeof(u32);
 
     cudaSetDevice(1);
 
@@ -224,26 +342,38 @@ void multi_interp(int n_vars, int n_samps)
 
     cudaMemcpy(d_xs, xs, bytes_xs, cudaMemcpyHostToDevice);
 
-    int threadsPerBlock = static_cast<int>(pow(n_samps, n_vars))%256;
-    int blocksPerGrid = (probe_len + threadsPerBlock - 1) / threadsPerBlock;
+    int required_threads = probe_len;
+    int threadsPerBlock = required_threads>256? 256 : probe_len;
+    int blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
 
     // Computre all probes
     compute_probes<<<blocksPerGrid, threadsPerBlock>>>(d_xs, d_probes, d_probes_2, n_vars, n_samps);
 
-    // Compute the expanded lagrange polynomials in canonical form while GPU busy
-    for (int i=0; i<n_vars; i++)
+    required_threads = lagrange_size;
+    threadsPerBlock = required_threads>256? 256 : probe_len;
+    blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
+
+    init_lagrange_branch_a<<<blocksPerGrid, threadsPerBlock>>>(d_xs, d_lagrange, n_samps);
+    init_lagrange_branch_b<<<blocksPerGrid, threadsPerBlock>>>(d_xs, d_lagrange, n_samps);
+    cudaDeviceSynchronize();
+
+
+    for (int i=0; i<two_exponent; i++)
     {
-        // TODO: do on GPU
-        compute_lagrange_pol(xs, lagrange_polynomials, i, n_vars, n_samps);
+        required_threads = pow(2, two_exponent-1)*n_samps*n_vars;
+        threadsPerBlock = required_threads>256? 256 : probe_len;
+        blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
+
+        lagrange_convolution<<<blocksPerGrid, threadsPerBlock>>>(d_lagrange, i);
     }
 
-    cudaMemcpy(d_lagrange, lagrange_polynomials, bytes_lagrange, cudaMemcpyHostToDevice);
+    cudaDeviceSynchronize();
 
 
     // Perform multidimensional interpolation
     for (int i=0; i<n_vars; i++)
     {
-        get_lagrange_coeffs_nd<<<blocksPerGrid, threadsPerBlock>>>(d_xs, d_probes, d_probes_2, d_lagrange, i, n_vars, n_samps);
+        get_lagrange_coeffs_nd<<<blocksPerGrid, threadsPerBlock>>>(d_xs, d_probes, d_probes_2, d_lagrange, i, n_vars, n_samps, two_exponent);
         std::swap(d_probes, d_probes_2);
     }
 
@@ -257,19 +387,16 @@ void multi_interp(int n_vars, int n_samps)
         probe_vec[i] = probes[i];
     }
 
+    cudaMemcpy(lagrange_polynomials, d_lagrange, bytes_lagrange, cudaMemcpyDeviceToHost);
 
-    // for (int i=0; i<n_vars*n_samps*n_samps; i++)
-    // {
-    //     if (i%n_samps == 0) {
-    //         std::cout << std::endl;
-    //     }
-    //     if (lagrange_polynomials[i] > PRIME / 2){
-    //         std::cout << lagrange_polynomials[i] - long(PRIME) << " ";
-    //     } else {
-    //         std::cout << lagrange_polynomials[i] << " ";
-    //     }
+    for (int i=0; i<lagrange_size; i++)
+    {
+        if (i%(2*(n_samps-1)) == 0) {
+            std::cout << std::endl;
+        }
+        std::cout << as_int(lagrange_polynomials[i]) << " ";
 
-    // }
+    }
 
     std::vector<std::string> vars = {"x", "y", "z"};
     std::string poly = nd_poly_to_string_flat(probe_vec, vars, n_samps);
