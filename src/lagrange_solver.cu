@@ -79,7 +79,7 @@ __device__ u32 compute_denom_nd(int current_index, const u32 *xs, int dim, int n
     return denom;
 }
 
-__global__ void get_lagrange_coeffs_nd(const u32 *xs, u32 *ys, u32 *out, u32 *lagrange, int dim, int n_vars, int n_samps, int two_exponent)
+__global__ void get_lagrange_coeffs_nd(const u32 *xs, u32 *ys, u32 *out, const u32 *lagrange, int dim, int n_vars, int n_samps, int two_exponent)
 {
     // Computes the coefficients to the Lagrange polynomials and writes them to ys
 
@@ -109,7 +109,8 @@ __global__ void get_lagrange_coeffs_nd(const u32 *xs, u32 *ys, u32 *out, u32 *la
         int flat_index_lagrange = index_xs*n_samps + i;
         int actual_index_lagrange = step_size*(flat_index_lagrange/pol_size) + flat_index_lagrange;
         // printf("idx: %i i: %i probe index: %i start index: %i to add: %i denom: %i lag: %i val: %i y: %i \n", idx, i, flat_index_ys, power, as_int(coefficient), as_int(denom), as_int(lagrange[flat_index_lagrange]), as_int(ff_multiply(ff_divide(lagrange[flat_index_lagrange], denom, PRIME), ys[idx], PRIME)), ys[idx]);
-        atomic_add(&out[flat_index_ys], ff_multiply(ff_divide(lagrange[actual_index_lagrange], denom, PRIME), ys[idx], PRIME));
+        u32 to_add = ff_multiply(ff_divide(lagrange[actual_index_lagrange], denom, PRIME), ys[idx], PRIME);
+        atomic_add(&out[flat_index_ys], to_add);
     }
 
     ys[idx] = 0;
@@ -245,6 +246,12 @@ __device__ void convolve_gpu(const u32 *kernel, const u32 *signal, u32 *out, int
 __global__ void lagrange_convolution(u32 *lagrange, int level)
 {
     int idx = threadIdx.x + blockIdx.x * blockDim.x;
+
+    if (idx == 0)
+    {
+        printf("level: %i \n", level);
+    }
+
     int sub_pol_size = pow(2, level) + 1;
     int step_size = pow(2, level+2);
     int start_val_ker = idx*step_size;
@@ -253,8 +260,18 @@ __global__ void lagrange_convolution(u32 *lagrange, int level)
     int kernel_size = sub_pol_size+1;
     int signal_size = sub_pol_size;
 
+    if (idx == 0)
+    {
+        printf("level: %i sig size: %i \n", level, signal_size);
+    }
+
     u32 *kernel = (u32*)malloc(kernel_size * sizeof(u32));
     u32 *signal = (u32*)malloc(signal_size * sizeof(u32));
+
+    if (idx == 0)
+    {
+        printf("level: %i \n", level);
+    }
     
     for (int i=0; i<sub_pol_size; i++)
     {
@@ -269,9 +286,14 @@ __global__ void lagrange_convolution(u32 *lagrange, int level)
         print_vec(signal, signal_size);
     }
 
+
+
     kernel[sub_pol_size] = 0; // Padding for convolution
 
     convolve_gpu(kernel, signal, lagrange, kernel_size, signal_size, start_val_ker);
+
+    free(kernel);
+    free(signal);
 }
 
 __global__ void init_lagrange_branch_a(const u32* xs, u32* lagrange, int n_samps)
@@ -332,15 +354,15 @@ void multi_interp(int n_vars, int two_exponent)
     size_t bytes_probes = probe_len * sizeof(u32);
     size_t bytes_lagrange = lagrange_size * sizeof(u32);
 
-    cudaSetDevice(1);
+    CUDA_SAFE_CALL(cudaSetDevice(1));
 
     // Allocate memory on the device
-    cudaMalloc(&d_xs, bytes_xs);
-    cudaMalloc(&d_probes, bytes_probes);
-    cudaMalloc(&d_probes_2, bytes_probes);
-    cudaMalloc(&d_lagrange, bytes_lagrange);
+    CUDA_SAFE_CALL(cudaMalloc(&d_xs, bytes_xs));
+    CUDA_SAFE_CALL(cudaMalloc(&d_probes, bytes_probes));
+    CUDA_SAFE_CALL(cudaMalloc(&d_probes_2, bytes_probes));
+    CUDA_SAFE_CALL(cudaMalloc(&d_lagrange, bytes_lagrange));
 
-    cudaMemcpy(d_xs, xs, bytes_xs, cudaMemcpyHostToDevice);
+    CUDA_SAFE_CALL(cudaMemcpy(d_xs, xs, bytes_xs, cudaMemcpyHostToDevice));
 
     int required_threads = probe_len;
     int threadsPerBlock = required_threads>256? 256 : probe_len;
@@ -355,7 +377,7 @@ void multi_interp(int n_vars, int two_exponent)
 
     init_lagrange_branch_a<<<blocksPerGrid, threadsPerBlock>>>(d_xs, d_lagrange, n_samps);
     init_lagrange_branch_b<<<blocksPerGrid, threadsPerBlock>>>(d_xs, d_lagrange, n_samps);
-    cudaDeviceSynchronize();
+    // cudaDeviceSynchronize();
 
 
     for (int i=0; i<two_exponent; i++)
@@ -367,46 +389,48 @@ void multi_interp(int n_vars, int two_exponent)
         lagrange_convolution<<<blocksPerGrid, threadsPerBlock>>>(d_lagrange, i);
     }
 
-    cudaDeviceSynchronize();
+    CUDA_SAFE_CALL(cudaDeviceSynchronize());
 
 
     // Perform multidimensional interpolation
+    required_threads = probe_len;
+    threadsPerBlock = required_threads>256? 256 : probe_len;
+    blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
     for (int i=0; i<n_vars; i++)
     {
         get_lagrange_coeffs_nd<<<blocksPerGrid, threadsPerBlock>>>(d_xs, d_probes, d_probes_2, d_lagrange, i, n_vars, n_samps, two_exponent);
         std::swap(d_probes, d_probes_2);
     }
 
-    cudaDeviceSynchronize();
-    cudaMemcpy(probes, d_probes, bytes_probes, cudaMemcpyDeviceToHost);
+    CUDA_SAFE_CALL(cudaDeviceSynchronize());
+    CUDA_SAFE_CALL(cudaMemcpy(probes, d_probes, bytes_probes, cudaMemcpyDeviceToHost));
+    CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, d_lagrange, bytes_lagrange, cudaMemcpyDeviceToHost));
 
-    std::vector<double> probe_vec(probe_len);
-    for (int i=0; i<probe_len; i++)
-    {
-        std::cout << "probe: " << probes[i] << " ";
-        probe_vec[i] = probes[i];
-    }
+    // std::vector<double> probe_vec(probe_len);
+    // for (int i=0; i<probe_len; i++)
+    // {
+    //     std::cout << "probe: " << probes[i] << " ";
+    //     probe_vec[i] = probes[i];
+    // }
 
-    cudaMemcpy(lagrange_polynomials, d_lagrange, bytes_lagrange, cudaMemcpyDeviceToHost);
+    // for (int i=0; i<lagrange_size; i++)
+    // {
+    //     if (i%(2*(n_samps-1)) == 0) {
+    //         std::cout << std::endl;
+    //     }
+    //     std::cout << as_int(lagrange_polynomials[i]) << " ";
 
-    for (int i=0; i<lagrange_size; i++)
-    {
-        if (i%(2*(n_samps-1)) == 0) {
-            std::cout << std::endl;
-        }
-        std::cout << as_int(lagrange_polynomials[i]) << " ";
+    // }
 
-    }
-
-    std::vector<std::string> vars = {"x", "y", "z"};
-    std::string poly = nd_poly_to_string_flat(probe_vec, vars, n_samps);
-    std::cout << std::endl << poly << std::endl;
+    // std::vector<std::string> vars = {"x", "y", "z"};
+    // std::string poly = nd_poly_to_string_flat(probe_vec, vars, n_samps);
+    // std::cout << std::endl << poly << std::endl;
 
     // Free memory on the device
-    cudaFree(d_xs);
-    cudaFree(d_probes);
-    cudaFree(d_probes_2);
-    cudaFree(d_lagrange);
+    CUDA_SAFE_CALL(cudaFree(d_xs));
+    CUDA_SAFE_CALL(cudaFree(d_probes));
+    CUDA_SAFE_CALL(cudaFree(d_probes_2));
+    CUDA_SAFE_CALL(cudaFree(d_lagrange));
 
 }
 

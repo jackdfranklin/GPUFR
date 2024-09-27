@@ -11,6 +11,7 @@
 #include <iomanip> 
 
 #include "GPUFR/ff_math.cuh"
+#include "GPUFR/cuda_safe_call.cuh"
 
 __device__ u32 fun(u32 *vars);
 
