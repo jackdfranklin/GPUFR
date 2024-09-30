@@ -89,7 +89,7 @@ __global__ void get_lagrange_coeffs_nd(const u32 *xs, u32 *ys, u32 *out, const u
     int idx = threadIdx.x + blockIdx.x * blockDim.x;
     if (idx < required_threads)
     {
-        int pol_size = pow(2, two_exponent) + 1;
+        int pol_size = (1 << two_exponent) + 1; // equivelent to pow(2, two_exponent) + 1
         int step_size = 2*(n_samps-1) - pol_size;
 
         // if (idx == 1){
@@ -258,9 +258,9 @@ __global__ void lagrange_convolution(u32 *lagrange, const u32 *lagrange_tmp, int
     int idx = threadIdx.x + blockIdx.x * blockDim.x;
     if (idx < required_threads)
     {
-        int sub_pol_size = pow(2, level) + 1;
+        int sub_pol_size = (1 << level) + 1; // equivelent to pow(2, level) + 1
 
-        int step_size = pow(2, level+2);
+        int step_size = 1 << (level+2); // equivelent to pow(2, level+2)
         int start_val_ker = idx*step_size;
         int start_val_sig = idx*step_size + step_size/2;
 
@@ -272,21 +272,31 @@ __global__ void lagrange_convolution(u32 *lagrange, const u32 *lagrange_tmp, int
         const u32 *signal = lagrange_tmp+start_val_sig;
         u32 *output = lagrange+start_val_ker;
 
-        if (idx == pow(2, 5)-1)
-        {
-            printf("level: %i start_val_ker: %i start_val_sig: %i \n", level, start_val_ker, start_val_sig);
-            print_vec(kernel, signal_size);
-            print_vec(signal, signal_size);
-            print_vec(lagrange_tmp, 20);
-            print_vec(lagrange, 20);
-        }
+        // if (idx == required_threads-1)
+        // {
+        //     printf("level: %i start_val_ker: %i start_val_sig: %i step_size %i \n", level, start_val_ker, start_val_sig, step_size);
+        //     // print_vec(kernel, signal_size);
+        //     // printf("\n");
+        //     // print_vec(signal, signal_size+1);
+        //     // printf("\n");
+        //     // print_vec(lagrange_tmp, 20);
+        //     // printf("\n");
+        //     // print_vec(lagrange, 20);
+        //     // printf("\n");
+        // }
 
         convolve_gpu(kernel, signal, output, kernel_size, signal_size);
 
-        if (idx == pow(2, 5)-1)
-        {
-            print_vec(output, 2*sub_pol_size);
-        }
+        // if (idx == required_threads-1)
+        // {
+        //     // print_vec(output-2*step_size, 2*sub_pol_size);
+        //     // printf("\n");
+        //     // print_vec(output-step_size, 2*sub_pol_size);
+        //     // printf("\n");
+        //     // print_vec(output, 2*sub_pol_size);
+
+        //     // printf("\n\n");
+        // }
     }
 }
 
@@ -337,10 +347,10 @@ void multi_interp(int n_vars, int two_exponent)
     int n_samps = pow(2, two_exponent) + 1;
     int probe_len = pow(n_samps, n_vars);
     int lagrange_size = n_vars*(n_samps-1)*n_samps*2;
-    u32 lagrange_polynomials[lagrange_size];
-
-    u32 probes[probe_len];
-    u32 xs[n_vars*n_samps];
+    
+    u32* lagrange_polynomials = new u32[lagrange_size];
+    u32* probes = new u32[probe_len];
+    u32* xs = new u32[n_vars*n_samps];
     std::srand(time(0));
 
     for (int i=0; i<n_vars; i++)
@@ -377,8 +387,9 @@ void multi_interp(int n_vars, int two_exponent)
 
     // Computre all probes
     compute_probes<<<blocksPerGrid, threadsPerBlock>>>(d_xs, d_probes, d_probes_2, n_vars, n_samps, required_threads);
+    CUDA_SAFE_CALL(cudaDeviceSynchronize());
 
-    required_threads = lagrange_size;
+    required_threads = lagrange_size/2;
     threadsPerBlock = required_threads>256? 256 : required_threads;
     blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
 
@@ -452,6 +463,10 @@ void multi_interp(int n_vars, int two_exponent)
     CUDA_SAFE_CALL(cudaFree(d_probes_2));
     CUDA_SAFE_CALL(cudaFree(d_lagrange));
     CUDA_SAFE_CALL(cudaFree(d_lagrange_tmp));
+
+    delete[] lagrange_polynomials;
+    delete[] probes;
+    delete[] xs;
 
 }
 

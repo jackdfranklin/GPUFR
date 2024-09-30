@@ -4,6 +4,8 @@ project(GPUFR VERSION 0.1
 			  DESCRIPTION "Black box function reconstruction on GPUs"
 			  LANGUAGES CXX CUDA)
 
+set(CMAKE_CUDA_FLAGS_DEBUG "-G -g")
+
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
 
 		include(CTest)
