@@ -25,7 +25,9 @@ __host__ __device__ void print_vec(const u32* vec, int size)
 __device__ u32 fun(u32 *vars)
 {
     u32 result;
-    result = vars[0];
+    u32 x = *vars;
+    u32 y = *(vars + 1);
+    result = x + y;
     return result;
 }
 
@@ -275,10 +277,10 @@ __global__ void lagrange_convolution(u32 *lagrange, const u32 *lagrange_tmp, int
         // if (idx == required_threads-1)
         // {
         //     printf("level: %i start_val_ker: %i start_val_sig: %i step_size %i \n", level, start_val_ker, start_val_sig, step_size);
-        //     // print_vec(kernel, signal_size);
-        //     // printf("\n");
-        //     // print_vec(signal, signal_size+1);
-        //     // printf("\n");
+        //     print_vec(kernel, signal_size);
+        //     printf("\n");
+        //     print_vec(signal, signal_size+1);
+        //     printf("\n");
         //     // print_vec(lagrange_tmp, 20);
         //     // printf("\n");
         //     // print_vec(lagrange, 20);
@@ -289,18 +291,18 @@ __global__ void lagrange_convolution(u32 *lagrange, const u32 *lagrange_tmp, int
 
         // if (idx == required_threads-1)
         // {
-        //     // print_vec(output-2*step_size, 2*sub_pol_size);
-        //     // printf("\n");
-        //     // print_vec(output-step_size, 2*sub_pol_size);
-        //     // printf("\n");
-        //     // print_vec(output, 2*sub_pol_size);
+        //     print_vec(output-2*step_size, 2*sub_pol_size);
+        //     printf("\n");
+        //     print_vec(output-step_size, 2*sub_pol_size);
+        //     printf("\n");
+        //     print_vec(output, 2*sub_pol_size);
 
-        //     // printf("\n\n");
+        //     printf("\n\n");
         // }
     }
 }
 
-__global__ void init_lagrange_branch_a(const u32* xs, u32* lagrange, u32* lagrange_tmp, int n_samps, int required_threads)
+__global__ void init_lagrange_branch_a(const u32* xs, u32* lagrange, u32* lagrange_tmp, int n_samps, int n_vars, int required_threads)
 {
     int idx = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -308,8 +310,9 @@ __global__ void init_lagrange_branch_a(const u32* xs, u32* lagrange, u32* lagran
     {
         int sub_pol_size = 2;
         int start_index = idx*sub_pol_size;
+        int large_step_size = (n_samps-1)*n_samps;
 
-        int read_index = idx%(n_samps-1);
+        int read_index = idx%(n_samps-1) + (idx/large_step_size)*n_samps;
         if (read_index < idx/(n_samps-1)) 
         {
             lagrange[start_index] = ff_subtract(0, xs[read_index], PRIME);
@@ -321,7 +324,7 @@ __global__ void init_lagrange_branch_a(const u32* xs, u32* lagrange, u32* lagran
     }
 }
 
-__global__ void init_lagrange_branch_b(const u32* xs, u32* lagrange, u32* lagrange_tmp, int n_samps, int required_threads)
+__global__ void init_lagrange_branch_b(const u32* xs, u32* lagrange, u32* lagrange_tmp, int n_samps, int n_vars, int required_threads)
 {
     int idx = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -329,8 +332,9 @@ __global__ void init_lagrange_branch_b(const u32* xs, u32* lagrange, u32* lagran
     {
         int sub_pol_size = 2;
         int start_index = idx*sub_pol_size;
+        int large_step_size = (n_samps-1)*n_samps;
 
-        int read_index = idx%(n_samps-1);
+        int read_index = idx%(n_samps-1) + (idx/large_step_size)*n_samps;
         if (read_index >= idx/(n_samps-1)) 
         {
             lagrange[start_index] = ff_subtract(0, xs[read_index + 1], PRIME);
@@ -344,6 +348,15 @@ __global__ void init_lagrange_branch_b(const u32* xs, u32* lagrange, u32* lagran
 
 void multi_interp(int n_vars, int two_exponent)
 {
+    int deviceCount = 0;
+    CUDA_SAFE_CALL(cudaGetDeviceCount(&deviceCount));
+
+    cudaDeviceProp deviceProp;
+    cudaGetDeviceProperties(&deviceProp, 0);
+    if (deviceProp.concurrentKernels == 0) {
+        std::cerr << "GPU does not support concurrent kernel execution!" << std::endl;
+    }
+
     int n_samps = pow(2, two_exponent) + 1;
     int probe_len = pow(n_samps, n_vars);
     int lagrange_size = n_vars*(n_samps-1)*n_samps*2;
@@ -358,7 +371,7 @@ void multi_interp(int n_vars, int two_exponent)
         for (int j=0; j<n_samps; j++)
         {
             int flat_index = i*n_samps + j;
-            xs[flat_index] = (j+1)%PRIME;
+            xs[flat_index] = (flat_index+1)%PRIME;
             // xs[flat_index] = (std::rand())%PRIME;
         }
     }
@@ -369,8 +382,6 @@ void multi_interp(int n_vars, int two_exponent)
     size_t bytes_xs = n_vars*n_samps * sizeof(u32);
     size_t bytes_probes = probe_len * sizeof(u32);
     size_t bytes_lagrange = lagrange_size * sizeof(u32);
-
-    CUDA_SAFE_CALL(cudaSetDevice(1));
 
     // Allocate memory on the device
     CUDA_SAFE_CALL(cudaMalloc(&d_xs, bytes_xs));
@@ -394,9 +405,15 @@ void multi_interp(int n_vars, int two_exponent)
     blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
 
     // Dispatch together TODO
-    init_lagrange_branch_a<<<blocksPerGrid, threadsPerBlock>>>(d_xs, d_lagrange, d_lagrange_tmp, n_samps, required_threads);
-    init_lagrange_branch_b<<<blocksPerGrid, threadsPerBlock>>>(d_xs, d_lagrange, d_lagrange_tmp, n_samps, required_threads);
-    CUDA_SAFE_CALL(cudaDeviceSynchronize());
+    cudaStream_t stream1, stream2;
+    cudaStreamCreate(&stream1);
+    cudaStreamCreate(&stream2);
+    init_lagrange_branch_a<<<blocksPerGrid, threadsPerBlock, 0, stream1>>>(d_xs, d_lagrange, d_lagrange_tmp, n_samps, n_vars, required_threads);
+    init_lagrange_branch_b<<<blocksPerGrid, threadsPerBlock, 0, stream2>>>(d_xs, d_lagrange, d_lagrange_tmp, n_samps, n_vars, required_threads);
+    cudaStreamSynchronize(stream1);
+    cudaStreamSynchronize(stream2);
+
+    // CUDA_SAFE_CALL(cudaDeviceSynchronize());
 
     for (int i=0; i<two_exponent; i++)
     {
@@ -405,7 +422,7 @@ void multi_interp(int n_vars, int two_exponent)
         threadsPerBlock = required_threads>256? 256 : required_threads;
         blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
 
-        printf("required_threads: %i threadsPerBlock: %i blocksPerGrid %i \n", required_threads, threadsPerBlock, blocksPerGrid);
+        // printf("required_threads: %i threadsPerBlock: %i blocksPerGrid %i \n", required_threads, threadsPerBlock, blocksPerGrid);
 
         lagrange_convolution<<<blocksPerGrid, threadsPerBlock>>>(d_lagrange, d_lagrange_tmp, i, required_threads);
         std::swap(d_lagrange, d_lagrange_tmp);
@@ -414,8 +431,8 @@ void multi_interp(int n_vars, int two_exponent)
     }
     std::swap(d_lagrange, d_lagrange_tmp);
 
-    CUDA_SAFE_CALL(cudaDeviceSynchronize());
-    CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, d_lagrange_tmp, bytes_lagrange, cudaMemcpyDeviceToHost));
+    // CUDA_SAFE_CALL(cudaDeviceSynchronize());
+    // CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, d_lagrange_tmp, bytes_lagrange, cudaMemcpyDeviceToHost));
 
 
 
@@ -438,11 +455,11 @@ void multi_interp(int n_vars, int two_exponent)
     std::vector<double> probe_vec(probe_len);
     for (int i=0; i<probe_len; i++)
     {
-        std::cout << "probe: " << probes[i] << " ";
+        // std::cout << "probe: " << probes[i] << " ";
         probe_vec[i] = probes[i];
     }
 
-    std::cout << "Lagrange: " <<std::endl;
+    // std::cout << "Lagrange: " <<std::endl;
 
     // for (int i=0; i<lagrange_size; i++)
     // {
