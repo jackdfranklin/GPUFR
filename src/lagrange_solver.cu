@@ -346,6 +346,7 @@ __global__ void init_lagrange_branch_b(const u32* xs, u32* lagrange, u32* lagran
     }
 }
 
+// TDOD: either switch to Karatsuba algorithm or FFT
 void multi_interp(int n_vars, int two_exponent)
 {
     int deviceCount = 0;
