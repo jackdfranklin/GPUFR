@@ -51,7 +51,7 @@ __global__ void re_order_2(u32* array, u32* out, int log_2n, int required_thread
     }
 }
 
-__global__ void NTT_level(u32* array, u32* out, u32 w, int level, int size, int required_threads, u32 prime)
+__global__ void NTT_level(u32* array, u32* out, u32 w, int level, int size, int required_threads, u32 prime, bool normalise)
 {
     int idx = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -66,13 +66,19 @@ __global__ void NTT_level(u32* array, u32* out, u32 w, int level, int size, int 
         u32 in_1 = array[read_loc];
         u32 in_2 = array[read_loc+sub_step];
 
-        printf("idx: %i read_loc: %i sub_step: %i exp1: %i exp2 %i \n", idx, read_loc, sub_step, w_exp_1, w_exp_2);
+        // printf("idx: %i read_loc: %i sub_step: %i exp1: %i exp2 %i \n", idx, read_loc, sub_step, w_exp_1, w_exp_2);
 
         u32 twiddle_1 = ff_pow(w, w_exp_1, prime); // Need to precompute
         u32 twiddle_2 = ff_pow(w, w_exp_2, prime); // Need to precompute
 
         u32 out_1 = ff_add( in_1, ff_multiply(in_2, twiddle_1, prime), prime);
         u32 out_2 = ff_add( in_1, ff_multiply(in_2, twiddle_2, prime), prime);
+
+        if (normalise)
+        {
+            out_1 = ff_divide(out_1, size, prime);
+            out_2 = ff_divide(out_2, size, prime);
+        }
 
         out[read_loc] = out_1;
         out[read_loc+sub_step] = out_2;
@@ -108,12 +114,18 @@ std::vector<u32> get_w(const std::string& filename, int index)
     return numbers;
 }
 
-void do_ntt(u32* &cu_array, u32* &cu_output, int arr_size, std::vector<u32> ws, u32 prime)
+void do_ntt(u32* &cu_array, u32* &cu_output, int arr_size, std::vector<u32> ws, u32 prime, bool inverse)
 {
     int num_levels = log2(arr_size);
     printf("num_levels: %i \n", num_levels);
 
-    u32 w = ws[num_levels];
+    u32 w;
+    if (inverse)
+    {
+        w = ff_divide(1, ws[num_levels], prime);
+    } else {
+        w = ws[num_levels];
+    }
 
     int required_threads = arr_size;
     int threadsPerBlock = required_threads>256? 256 : required_threads;
@@ -122,13 +134,14 @@ void do_ntt(u32* &cu_array, u32* &cu_output, int arr_size, std::vector<u32> ws, 
     re_order_2<<<blocksPerGrid, threadsPerBlock>>>(cu_array, cu_output, num_levels, required_threads);
     std::swap(cu_array, cu_output);
 
-    for (int level=1; level<= num_levels; level++)
+    for (int level=1; level <= num_levels; level++)
     {
         required_threads = arr_size / 2;
         threadsPerBlock = required_threads>256? 256 : required_threads;
         blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
+        bool normalise = inverse && (level==num_levels);
 
-        NTT_level<<<blocksPerGrid, threadsPerBlock>>>(cu_array, cu_output, w, level, arr_size, required_threads, prime);
+        NTT_level<<<blocksPerGrid, threadsPerBlock>>>(cu_array, cu_output, w, level, arr_size, required_threads, prime, normalise);
         std::swap(cu_array, cu_output);
     }
 
