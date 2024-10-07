@@ -67,7 +67,7 @@ __device__ void atomic_add(u32 *l_val, u32 r_val)
 
 __device__ u32 compute_denom_nd(int current_index, const u32 *xs, int dim, int n_vars, int n_samps, int idx)
 {
-    int flat_current_index = dim*n_samps + static_cast<int>(floorf(idx/pow(n_samps, dim)))%n_samps;
+    int flat_current_index = dim*n_samps + (idx/static_cast<int>(pow(n_samps, dim)))%n_samps;
 
     u32 denom;
     denom = 1;
@@ -75,7 +75,7 @@ __device__ u32 compute_denom_nd(int current_index, const u32 *xs, int dim, int n
     for (int i=0; i<n_samps; i++)
     {
         int flat_index = dim*n_samps + i;
-        if (flat_index != flat_current_index)
+        if (flat_index != flat_current_index) // Bad warp divergence ~3x slowdown
         {
             denom = ff_multiply(denom, (ff_subtract(xs[flat_current_index],  xs[flat_index], PRIME)), PRIME);
         }
@@ -84,6 +84,7 @@ __device__ u32 compute_denom_nd(int current_index, const u32 *xs, int dim, int n
     return denom;
 }
 
+// Make a new kernel that just multiplies each lagrange term by the probe and devides by the denom, then thrust reduct into out and repeat for next dimension
 __global__ void get_lagrange_coeffs_nd(const u32 *xs, u32 *ys, u32 *out, const u32 *lagrange, int dim, int n_vars, int n_samps, int two_exponent, int required_threads)
 {
     // Computes the coefficients to the Lagrange polynomials and writes them to ys
@@ -105,19 +106,21 @@ __global__ void get_lagrange_coeffs_nd(const u32 *xs, u32 *ys, u32 *out, const u
         u32 coefficient = ff_divide(ys[idx], denom, PRIME);
 
         int index_step_ys = pow(n_samps, dim);
-        int power = static_cast<int>(floorf(pow(n_samps, dim+1)));
-        int start_index_ys = floorf(idx / power)*power + idx%index_step_ys;
+        int power = static_cast<int>((pow(n_samps, dim+1)));
+        int start_index_ys = (idx / power)*power + idx%index_step_ys;
 
-        int index_xs = dim*n_samps + static_cast<int>(floorf(idx/pow(n_samps, dim)))%n_samps;
+        int index_xs = dim*n_samps + static_cast<int>((idx/pow(n_samps, dim)))%n_samps;
 
+        // Make more parallel
         for (int i=0; i<n_samps; i++)
         {
+            // Takes each term in the lagrange polynomial and adds it to the correct location in the output array
             int flat_index_ys = start_index_ys+i*index_step_ys;
             int flat_index_lagrange = index_xs*n_samps + i;
             int actual_index_lagrange = step_size*(flat_index_lagrange/pol_size) + flat_index_lagrange;
             // printf("idx: %i i: %i probe index: %i start index: %i to add: %i denom: %i lag: %i val: %i y: %i \n", idx, i, flat_index_ys, power, as_int(coefficient), as_int(denom), as_int(lagrange[flat_index_lagrange]), as_int(ff_multiply(ff_divide(lagrange[flat_index_lagrange], denom, PRIME), ys[idx], PRIME)), ys[idx]);
             u32 to_add = ff_multiply(ff_divide(lagrange[actual_index_lagrange], denom, PRIME), ys[idx], PRIME);
-            atomic_add(&out[flat_index_ys], to_add); // TODO: more efficient reduction, this is the current bottleneck
+            atomic_add(&out[flat_index_ys], to_add); // TODO: more efficient reduction, this is the current bottleneck ~10x slow down
         }
 
         ys[idx] = 0;
@@ -298,7 +301,7 @@ __global__ void lagrange_convolution(u32 *lagrange, const u32 *lagrange_tmp, int
         //     print_vec(output, 2*sub_pol_size);
 
         //     printf("\n\n");
-        // }
+        //
     }
 }
 
@@ -346,7 +349,8 @@ __global__ void init_lagrange_branch_b(const u32* xs, u32* lagrange, u32* lagran
     }
 }
 
-// TDOD: either switch to Karatsuba algorithm or FFT
+
+// TDOD: either switch to Karatsuba algorithm or FFT use Barett algorithm for division
 void multi_interp(int n_vars, int two_exponent)
 {
     int deviceCount = 0;

@@ -17,8 +17,13 @@ __device__ u32 ff_multiply(u32 a, u32 b, u32 p){
 
 __device__ u32 ff_pow(u32 m, u32 exp, u32 p){
 	u32 result = m%p;
-	for(int i = 0; i < exp-1; i++){
-		result = ff_multiply(result, m, p);
+	if (exp > 0)
+	{
+		for(int i = 0; i < exp-1; i++){
+			result = ff_multiply(result, m, p);
+		}
+	} else {
+		result = 1;
 	}
 	return result;
 }
