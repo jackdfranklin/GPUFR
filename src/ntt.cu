@@ -56,14 +56,14 @@ __global__ void re_order_bulk(u32* array, u32* out, int log_2n, int pol_width, i
     if (idx < required_threads)
     {
         int sub_pol_index = idx%pol_width;
-        int sub_pol_start = idx / pol_width;
+        int sub_pol_start = (idx/pol_width)*pol_width;
         int desired_index = bit_reverseal(sub_pol_index, log_2n, required_threads);
 
         out[idx] = array[sub_pol_start + desired_index]; // Try to do more contiguously
     }
 }
 
-__global__ void NTT_level(u32* array, u32* out, u32 w, int level, int size, int required_threads, u32 prime, bool normalise)
+__global__ void ntt_level(u32* array, u32* out, u32 w, int level, int size, u32 prime, bool normalise, int required_threads)
 {
     int idx = threadIdx.x + blockIdx.x * blockDim.x;
 
@@ -71,7 +71,7 @@ __global__ void NTT_level(u32* array, u32* out, u32 w, int level, int size, int 
     if(idx < required_threads)
     {
         int sub_step = 1<<(level-1);
-        int read_loc = (idx%sub_step) + (1<<(level)) * (idx / sub_step); // i%(l-1) + 2^(l) * floor(i/(l-1))
+        int read_loc = (idx%sub_step) + (1<<(level)) * (idx / sub_step); // i%(2^(l-1)) + 2^(l) * floor(i/(l-1))
         int w_exp_1 = ((size*read_loc) / (1<<level)) % size; // floor(N*i / 2^(l))
         int w_exp_2 = ((size*(read_loc + sub_step)) / (1<<level)) % size; // floor(N*i / 2^(l))
         
@@ -92,6 +92,41 @@ __global__ void NTT_level(u32* array, u32* out, u32 w, int level, int size, int 
 
         out[read_loc] = out_1;
         out[read_loc+sub_step] = out_2;
+    }
+}
+
+__global__ void ntt_level_bulk(u32* array, u32* out, u32 w, int level, int pol_width, u32 prime, bool normalise, int required_threads)
+{
+    int idx = threadIdx.x + blockIdx.x * blockDim.x;
+
+    
+    if(idx < required_threads)
+    {
+        int sub_pol_index = idx%(pol_width/2);
+        int sub_pol_start = (idx/(pol_width/2))*pol_width;
+
+        int sub_step = 1<<(level-1);
+        int read_loc = (sub_pol_index%sub_step) + (1<<(level)) * (sub_pol_index / sub_step); // i%(2^(l-1)) + 2^(l) * floor(i/(l-1))
+        int w_exp_1 = ((pol_width*read_loc) / (1<<level)) % pol_width; // floor(N*i / 2^(l))
+        int w_exp_2 = ((pol_width*(read_loc + sub_step)) / (1<<level)) % pol_width; // floor(N*i / 2^(l))
+        
+        u32 in_1 = array[sub_pol_start+read_loc];
+        u32 in_2 = array[sub_pol_start+read_loc+sub_step];
+
+        u32 twiddle_1 = ff_pow(w, w_exp_1, prime); // Need to precompute
+        u32 twiddle_2 = ff_pow(w, w_exp_2, prime); // Need to precompute
+
+        u32 out_1 = ff_add( in_1, ff_multiply(in_2, twiddle_1, prime), prime);
+        u32 out_2 = ff_add( in_1, ff_multiply(in_2, twiddle_2, prime), prime);
+
+        if (normalise)
+        {
+            out_1 = ff_divide(out_1, pol_width, prime);
+            out_2 = ff_divide(out_2, pol_width, prime);
+        }
+
+        out[sub_pol_start+read_loc] = out_1;
+        out[sub_pol_start+read_loc+sub_step] = out_2;
     }
 }
 
@@ -150,7 +185,7 @@ void do_ntt(u32* &cu_array, u32* &cu_output, int arr_size, std::vector<u32> ws, 
         blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
         bool normalise = inverse && (level==num_levels);
 
-        NTT_level<<<blocksPerGrid, threadsPerBlock>>>(cu_array, cu_output, w, level, arr_size, required_threads, prime, normalise);
+        ntt_level<<<blocksPerGrid, threadsPerBlock>>>(cu_array, cu_output, w, level, arr_size, prime, normalise, required_threads);
         std::swap(cu_array, cu_output);
     }
 
@@ -162,6 +197,7 @@ void do_bulk_ntt(u32* &cu_array, u32* &cu_output, int num_samps, int mult_depth,
     int pol_width = 1<<(mult_depth+2);
     int initial_pol_size = 4;
     int num_levels = log2(pol_width);
+    int array_len = num_samps*(num_samps-1)*initial_pol_size;
 
     u32 w;
     if (inverse)
@@ -171,23 +207,23 @@ void do_bulk_ntt(u32* &cu_array, u32* &cu_output, int num_samps, int mult_depth,
         w = ws[num_levels];
     }
 
-    int required_threads = num_samps*(num_samps-1)*initial_pol_size;
+    int required_threads = array_len;
     int threadsPerBlock = required_threads>256? 256 : required_threads;
     int blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
 
     re_order_bulk<<<blocksPerGrid, threadsPerBlock>>>(cu_array, cu_output, num_levels, pol_width, required_threads);
     std::swap(cu_array, cu_output);
 
-    // for (int level=1; level <= num_levels; level++)
-    // {
-    //     required_threads = arr_size / 2;
-    //     threadsPerBlock = required_threads>256? 256 : required_threads;
-    //     blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
-    //     bool normalise = inverse && (level==num_levels);
+    for (int level=1; level <= num_levels; level++)
+    {
+        required_threads = array_len / 2;
+        threadsPerBlock = required_threads>256? 256 : required_threads;
+        blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
+        bool normalise = inverse && (level==num_levels);
 
-    //     NTT_level<<<blocksPerGrid, threadsPerBlock>>>(cu_array, cu_output, w, level, arr_size, required_threads, prime, normalise);
-    //     std::swap(cu_array, cu_output);
-    // }
+        ntt_level_bulk<<<blocksPerGrid, threadsPerBlock>>>(cu_array, cu_output, w, level, pol_width, prime, normalise, required_threads);
+        std::swap(cu_array, cu_output);
+    }
 
-    // std::swap(cu_array, cu_output);
+    std::swap(cu_array, cu_output);
 }
