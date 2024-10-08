@@ -110,3 +110,60 @@ TEST_CASE("ntt_and_intt"){
     delete[] in_arr;
     delete[] out_arr;
 }
+
+TEST_CASE("ntt_bulk_reorder"){
+    int deviceCount = 0;
+    CUDA_SAFE_CALL(cudaGetDeviceCount(&deviceCount));
+
+    int exp = 2;
+    int n_samps = (1<<2) + 1;
+    int initial_pol_size = 4;
+    int arr_size = n_samps*(n_samps-1)*initial_pol_size;
+
+    u32* in_arr = new u32[arr_size];
+    u32* out_arr = new u32[arr_size];
+
+    for (int i=0; i<arr_size; i++)
+    {
+        if (i%initial_pol_size == 0 || i%initial_pol_size == 1)
+        {
+            in_arr[i] = 0;
+        } else if (i%initial_pol_size == 2)
+        {
+            in_arr[i] = 1;
+        } else {
+            in_arr[i] = i+1;
+        }
+    }
+
+    u32* d_in_arr;
+    u32* d_out_arr;
+
+    int bytes_arr = arr_size*sizeof(u32);
+    CUDA_SAFE_CALL(cudaMalloc(&d_in_arr, bytes_arr));
+    CUDA_SAFE_CALL(cudaMalloc(&d_out_arr, bytes_arr));
+
+    CUDA_SAFE_CALL(cudaMemcpy(d_in_arr, in_arr, bytes_arr, cudaMemcpyHostToDevice));
+
+    std::vector<u32> ws = get_w("./precomp/primes_roots_13.csv", 0);
+    u32 prime = ws[0];
+    do_bulk_ntt(d_in_arr, d_out_arr, n_samps, 0, ws, prime);
+    // do_ntt(d_out_arr, d_in_arr, arr_size, ws, prime, true);
+
+    CUDA_SAFE_CALL(cudaMemcpy(out_arr, d_in_arr, bytes_arr, cudaMemcpyDeviceToHost));
+
+    print_vec(out_arr, arr_size, prime);
+
+    // for (int i=0; i<arr_size; i++)
+    // {
+    //     REQUIRE(in_arr[i] == out_arr[i]);
+    // }
+
+    CUDA_SAFE_CALL(cudaFree(d_in_arr));
+    CUDA_SAFE_CALL(cudaFree(d_out_arr));
+
+    delete[] in_arr;
+    delete[] out_arr;
+
+    REQUIRE(false);
+}
