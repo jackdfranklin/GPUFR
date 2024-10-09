@@ -27,8 +27,8 @@ __device__ u32 fun(u32 *vars)
 {
     u32 result;
     u32 x = *vars;
-    // u32 y = *(vars + 1);
-    result = x;
+    u32 y = *(vars + 1);
+    result = x + y;
     return result;
 }
 
@@ -376,7 +376,7 @@ __global__ void compactify(u32 *lagrange, u32 *lagrange_tmp, int pol_size, int p
     if (idx < required_threads)
     {
         int read_index = (idx/pol_size)*pol_container_size + idx%pol_size;
-        printf("idx %i read_index %i pol_container_size %i\n", idx, read_index, pol_container_size);
+        // printf("idx %i read_index %i pol_container_size %i\n", idx, read_index, pol_container_size);
 
         lagrange_tmp[idx] = lagrange[read_index];
     }
@@ -457,9 +457,9 @@ void multi_interp(int n_vars, int two_exponent)
     cudaStreamSynchronize(stream2);
 
     // CUDA_SAFE_CALL(cudaDeviceSynchronize());
-    CUDA_SAFE_CALL(cudaDeviceSynchronize());
-    CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, d_lagrange, bytes_lagrange, cudaMemcpyDeviceToHost));
-    print_vec(lagrange_polynomials, lagrange_size, prime);
+    // CUDA_SAFE_CALL(cudaDeviceSynchronize());
+    // CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, d_lagrange, bytes_lagrange, cudaMemcpyDeviceToHost));
+    // print_vec(lagrange_polynomials, lagrange_size, prime);
 
 
     for (int i=0; i<two_exponent; i++)
@@ -474,23 +474,23 @@ void multi_interp(int n_vars, int two_exponent)
 
         // std::swap(d_lagrange, d_lagrange_tmp);
 
-        CUDA_SAFE_CALL(cudaDeviceSynchronize());
-        CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, d_lagrange_tmp, bytes_lagrange, cudaMemcpyDeviceToHost));
-        print_vec(lagrange_polynomials, lagrange_size, prime);
+        // CUDA_SAFE_CALL(cudaDeviceSynchronize());
+        // CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, d_lagrange_tmp, bytes_lagrange, cudaMemcpyDeviceToHost));
+        // print_vec(lagrange_polynomials, lagrange_size, prime);
 
         element_multiply<<<blocksPerGrid, threadsPerBlock>>>(d_lagrange_tmp, pol_size, prime, required_threads);
         // std::swap(d_lagrange, d_lagrange_tmp);
 
-        CUDA_SAFE_CALL(cudaDeviceSynchronize());
-        CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, d_lagrange_tmp, bytes_lagrange, cudaMemcpyDeviceToHost));
-        print_vec(lagrange_polynomials, lagrange_size, prime);
+        // CUDA_SAFE_CALL(cudaDeviceSynchronize());
+        // CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, d_lagrange_tmp, bytes_lagrange, cudaMemcpyDeviceToHost));
+        // print_vec(lagrange_polynomials, lagrange_size, prime);
 
 
         do_bulk_ntt(d_lagrange_tmp, d_lagrange, n_samps, n_vars, i, ws, prime, true);
 
-        CUDA_SAFE_CALL(cudaDeviceSynchronize());
-        CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, d_lagrange, bytes_lagrange, cudaMemcpyDeviceToHost));
-        print_vec(lagrange_polynomials, lagrange_size, prime);
+        // CUDA_SAFE_CALL(cudaDeviceSynchronize());
+        // CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, d_lagrange, bytes_lagrange, cudaMemcpyDeviceToHost));
+        // print_vec(lagrange_polynomials, lagrange_size, prime);
     }
     // std::swap(d_lagrange, d_lagrange_tmp);
 
@@ -506,9 +506,9 @@ void multi_interp(int n_vars, int two_exponent)
     compactify<<<blocksPerGrid, threadsPerBlock>>>(d_lagrange, d_lagrange_tmp, pol_size, pol_container_size, required_threads); // Inefficient but not that bad
     std::swap(d_lagrange, d_lagrange_tmp);
 
-    CUDA_SAFE_CALL(cudaDeviceSynchronize());
-    CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, d_lagrange, bytes_lagrange, cudaMemcpyDeviceToHost));
-    print_vec(lagrange_polynomials, lagrange_size, prime);
+    // CUDA_SAFE_CALL(cudaDeviceSynchronize());
+    // CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, d_lagrange, bytes_lagrange, cudaMemcpyDeviceToHost));
+    // print_vec(lagrange_polynomials, lagrange_size, prime);
 
     // Perform multidimensional interpolation
     required_threads = probe_len;
