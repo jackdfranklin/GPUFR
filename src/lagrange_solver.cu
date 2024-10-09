@@ -432,9 +432,11 @@ void multi_interp(int n_vars, int two_exponent)
     }
     std::swap(d_lagrange, d_lagrange_tmp);
 
-    // CUDA_SAFE_CALL(cudaDeviceSynchronize());
+    CUDA_SAFE_CALL(cudaDeviceSynchronize());
     // CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, d_lagrange_tmp, bytes_lagrange, cudaMemcpyDeviceToHost));
+    CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, d_lagrange, bytes_lagrange, cudaMemcpyDeviceToHost));
 
+    print_vec(lagrange_polynomials, lagrange_size);
 
 
     // Perform multidimensional interpolation
