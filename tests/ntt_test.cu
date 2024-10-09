@@ -1,4 +1,5 @@
 #include "GPUFR/ntt.cuh"
+#include "GPUFR/lagrange_solver.cuh"
 
 #include <array>
 #include <vector>
@@ -13,21 +14,21 @@
 #include <catch2/generators/catch_generators_adapters.hpp>
 #include <catch2/generators/catch_generators_random.hpp>
 
-int as_int(u32 val, u32 prime)
-{
-    int result = val;
-    if (result > prime/2) result = result - prime;
-    return result;
-}
+// int as_int(u32 val, u32 prime)
+// {
+//     int result = val;
+//     if (result > prime/2) result = result - prime;
+//     return result;
+// }
 
-void print_vec(const u32* vec, int size, u32 prime)
-{
-    for (int i=0; i<size; i++)
-    {
-        printf("%i, ", vec[i]);
-    }
-    printf("\n");
-}
+// void print_vec(const u32* vec, int size, u32 prime)
+// {
+//     for (int i=0; i<size; i++)
+//     {
+//         printf("%i, ", vec[i]);
+//     }
+//     printf("\n");
+// }
 
 TEST_CASE("ntt_test"){
     int deviceCount = 0;
