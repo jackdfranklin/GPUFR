@@ -12,6 +12,7 @@
 
 #include "GPUFR/ff_math.cuh"
 #include "GPUFR/cuda_safe_call.cuh"
+#include "GPUFR/ntt.cuh"
 
 __device__ u32 fun(u32 *vars);
 
@@ -27,6 +28,6 @@ void convolve_cpp(const u32 *kernel, const u32 *signal, u32 *out, int kernel_siz
 
 void compute_lagrange_pol(const u32 *xs, u32 *lagrange, int dim, int n_vars, int n_samps);
 
-std::string nd_poly_to_string_flat(const std::vector<double>& coef_flat, const std::vector<std::string>& variables, int n_samps);
+std::string nd_poly_to_string_flat(const std::vector<double>& coef_flat, const std::vector<std::string>& variables, int n_samps, u32 prime);
 
 void multi_interp(int n_vars, int n_samps);

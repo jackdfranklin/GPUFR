@@ -6,19 +6,20 @@
 #define UNSIGNED_TYPE unsigned
 #define PRIME 105097513 // Must be less than (max unsigend) / 2
 
-__host__ __device__ int as_int(u32 val)
-{
-    int result = val;
-    if (result > PRIME/2) result = result - PRIME;
-    return result;
-}
+// __host__ __device__ int as_int(u32 val, u32 prime)
+// {
+//     int result = val;
+//     if (result > prime/2) result = result - prime;
+//     return result;
+// }
 
 __host__ __device__ void print_vec(const u32* vec, int size)
 {
     for (int i=0; i<size; i++)
     {
-        printf("%i, ", as_int(vec[i]));
+        printf("%i, ", vec[i]);
     }
+    printf("\n");
     printf("\n");
 }
 
@@ -26,8 +27,8 @@ __device__ u32 fun(u32 *vars)
 {
     u32 result;
     u32 x = *vars;
-    u32 y = *(vars + 1);
-    result = x + y;
+    // u32 y = *(vars + 1);
+    result = x;
     return result;
 }
 
@@ -85,7 +86,7 @@ __device__ u32 compute_denom_nd(int current_index, const u32 *xs, int dim, int n
 }
 
 // Make a new kernel that just multiplies each lagrange term by the probe and devides by the denom, then thrust reduct into out and repeat for next dimension
-__global__ void get_lagrange_coeffs_nd(const u32 *xs, u32 *ys, u32 *out, const u32 *lagrange, int dim, int n_vars, int n_samps, int two_exponent, int required_threads)
+__global__ void get_lagrange_coeffs_nd(const u32 *xs, u32 *ys, u32 *out, const u32 *lagrange, int dim, int n_vars, int n_samps, int two_exponent, u32 prime, int required_threads)
 {
     // Computes the coefficients to the Lagrange polynomials and writes them to ys
 
@@ -103,7 +104,7 @@ __global__ void get_lagrange_coeffs_nd(const u32 *xs, u32 *ys, u32 *out, const u
         u32 denom;
         denom = compute_denom_nd(idx, xs, dim, n_vars, n_samps, idx);
 
-        u32 coefficient = ff_divide(ys[idx], denom, PRIME);
+        u32 coefficient = ff_divide(ys[idx], denom, prime);
 
         int index_step_ys = pow(n_samps, dim);
         int power = static_cast<int>((pow(n_samps, dim+1)));
@@ -119,7 +120,7 @@ __global__ void get_lagrange_coeffs_nd(const u32 *xs, u32 *ys, u32 *out, const u
             int flat_index_lagrange = index_xs*n_samps + i;
             int actual_index_lagrange = step_size*(flat_index_lagrange/pol_size) + flat_index_lagrange;
             // printf("idx: %i i: %i probe index: %i start index: %i to add: %i denom: %i lag: %i val: %i y: %i \n", idx, i, flat_index_ys, power, as_int(coefficient), as_int(denom), as_int(lagrange[flat_index_lagrange]), as_int(ff_multiply(ff_divide(lagrange[flat_index_lagrange], denom, PRIME), ys[idx], PRIME)), ys[idx]);
-            u32 to_add = ff_multiply(ff_divide(lagrange[actual_index_lagrange], denom, PRIME), ys[idx], PRIME);
+            u32 to_add = ff_multiply(ff_divide(lagrange[actual_index_lagrange], denom, prime), ys[idx], prime);
             atomic_add(&out[flat_index_ys], to_add); // TODO: more efficient reduction, this is the current bottleneck ~10x slow down
         }
 
@@ -197,14 +198,14 @@ void compute_lagrange_pol(const u32 *xs, u32 *lagrange, int dim, int n_vars, int
 }
 
 
-std::string nd_poly_to_string_flat(const std::vector<double>& coef_flat, const std::vector<std::string>& variables, int n_samps) {
+std::string nd_poly_to_string_flat(const std::vector<double>& coef_flat, const std::vector<std::string>& variables, int n_samps, u32 prime) {
     // From chat GPT
     int dim = variables.size();
     std::ostringstream result;
     for (size_t i = 0; i < coef_flat.size(); ++i) {
         double c = coef_flat[i];
         if (sqrt(pow(c, 2)) >= 1) {
-            c = c > PRIME/2.0 ? c-PRIME : c;
+            c = c > prime/2.0 ? c-prime : c;
             result << (c > 0 && result.tellp() > 0 ? "+ " : "") << std::fixed << std::setprecision(0) << c;
             for (int j = 0; j < dim; ++j) {
                 int power = static_cast<int>(std::floor(i / std::pow(n_samps, j))) % n_samps;
@@ -305,47 +306,78 @@ __global__ void lagrange_convolution(u32 *lagrange, const u32 *lagrange_tmp, int
     }
 }
 
-__global__ void init_lagrange_branch_a(const u32* xs, u32* lagrange, u32* lagrange_tmp, int n_samps, int n_vars, int required_threads)
+__global__ void init_lagrange_branch_a(const u32* xs, u32* lagrange, int n_samps, int n_vars, u32 prime, int required_threads)
 {
     int idx = threadIdx.x + blockIdx.x * blockDim.x;
 
     if (idx < required_threads)
     {
-        int sub_pol_size = 2;
+        int sub_pol_size = 4;
         int start_index = idx*sub_pol_size;
         int large_step_size = (n_samps-1)*n_samps;
 
         int read_index = idx%(n_samps-1) + (idx/large_step_size)*n_samps;
         if (read_index < idx/(n_samps-1)) 
         {
-            lagrange[start_index] = ff_subtract(0, xs[read_index], PRIME);
+            lagrange[start_index] = ff_subtract(0, xs[read_index], prime);
             lagrange[start_index+1] = 1;
-
-            lagrange_tmp[start_index] = ff_subtract(0, xs[read_index], PRIME);
-            lagrange_tmp[start_index+1] = 1;
+            lagrange[start_index+2] = 0;
+            lagrange[start_index+3] = 0;
         }
     }
 }
 
-__global__ void init_lagrange_branch_b(const u32* xs, u32* lagrange, u32* lagrange_tmp, int n_samps, int n_vars, int required_threads)
+__global__ void init_lagrange_branch_b(const u32* xs, u32* lagrange, int n_samps, int n_vars, u32 prime, int required_threads)
 {
     int idx = threadIdx.x + blockIdx.x * blockDim.x;
 
     if (idx < required_threads)
     {
-        int sub_pol_size = 2;
+        int sub_pol_size = 4;
         int start_index = idx*sub_pol_size;
         int large_step_size = (n_samps-1)*n_samps;
 
         int read_index = idx%(n_samps-1) + (idx/large_step_size)*n_samps;
         if (read_index >= idx/(n_samps-1)) 
         {
-            lagrange[start_index] = ff_subtract(0, xs[read_index + 1], PRIME);
+            lagrange[start_index] = ff_subtract(0, xs[read_index + 1], prime);
             lagrange[start_index+1] = 1;
-
-            lagrange_tmp[start_index] = ff_subtract(0, xs[read_index + 1], PRIME);
-            lagrange_tmp[start_index+1] = 1;
+            lagrange[start_index+2] = 0;
+            lagrange[start_index+3] = 0;
         }
+    }
+}
+
+
+__global__ void element_multiply(u32* d_lagrange, int pol_size, u32 prime, int required_threads)
+{
+    int idx = threadIdx.x + blockIdx.x * blockDim.x;
+
+    if (idx < required_threads)
+    {
+        int sub_pol_index = idx%pol_size;
+        int pol_start_index = (idx/pol_size)*2*pol_size;
+
+        u32 in_1 = d_lagrange[pol_start_index+sub_pol_index];
+        u32 in_2 = d_lagrange[pol_start_index+pol_size+sub_pol_index];
+
+        u32 out = ff_multiply(in_1, in_2, prime);
+
+        d_lagrange[pol_start_index+sub_pol_index] = out;
+        d_lagrange[pol_start_index+pol_size+sub_pol_index] = 0;
+    }
+}
+
+__global__ void compactify(u32 *lagrange, u32 *lagrange_tmp, int pol_size, int pol_container_size, int required_threads)
+{
+    int idx = threadIdx.x + blockIdx.x * blockDim.x;
+
+    if (idx < required_threads)
+    {
+        int read_index = (idx/pol_size)*pol_container_size + idx%pol_size;
+        printf("idx %i read_index %i pol_container_size %i\n", idx, read_index, pol_container_size);
+
+        lagrange_tmp[idx] = lagrange[read_index];
     }
 }
 
@@ -364,19 +396,24 @@ void multi_interp(int n_vars, int two_exponent)
 
     int n_samps = pow(2, two_exponent) + 1;
     int probe_len = pow(n_samps, n_vars);
-    int lagrange_size = n_vars*(n_samps-1)*n_samps*2;
+    int initial_pol_size = 4;
+    int lagrange_size = n_vars*(n_samps-1)*n_samps*initial_pol_size;
     
     u32* lagrange_polynomials = new u32[lagrange_size];
     u32* probes = new u32[probe_len];
     u32* xs = new u32[n_vars*n_samps];
     std::srand(time(0));
 
+    std::vector<u32> ws = get_w("./precomp/primes_roots_13.csv", 0);
+    u32 prime = ws[0];
+
     for (int i=0; i<n_vars; i++)
     {
         for (int j=0; j<n_samps; j++)
         {
             int flat_index = i*n_samps + j;
-            xs[flat_index] = (flat_index+1)%PRIME;
+            xs[flat_index] = (flat_index+1)%prime;
+            // xs[flat_index] = (j%prime+1);
             // xs[flat_index] = (std::rand())%PRIME;
         }
     }
@@ -413,33 +450,64 @@ void multi_interp(int n_vars, int two_exponent)
     cudaStream_t stream1, stream2;
     cudaStreamCreate(&stream1);
     cudaStreamCreate(&stream2);
-    init_lagrange_branch_a<<<blocksPerGrid, threadsPerBlock, 0, stream1>>>(d_xs, d_lagrange, d_lagrange_tmp, n_samps, n_vars, required_threads);
-    init_lagrange_branch_b<<<blocksPerGrid, threadsPerBlock, 0, stream2>>>(d_xs, d_lagrange, d_lagrange_tmp, n_samps, n_vars, required_threads);
+    init_lagrange_branch_a<<<blocksPerGrid, threadsPerBlock, 0, stream1>>>(d_xs, d_lagrange, n_samps, n_vars, prime, required_threads);
+    init_lagrange_branch_b<<<blocksPerGrid, threadsPerBlock, 0, stream2>>>(d_xs, d_lagrange, n_samps, n_vars, prime, required_threads);
     cudaStreamSynchronize(stream1);
     cudaStreamSynchronize(stream2);
 
     // CUDA_SAFE_CALL(cudaDeviceSynchronize());
+    CUDA_SAFE_CALL(cudaDeviceSynchronize());
+    CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, d_lagrange, bytes_lagrange, cudaMemcpyDeviceToHost));
+    print_vec(lagrange_polynomials, lagrange_size);
+
 
     for (int i=0; i<two_exponent; i++)
     {
-        required_threads = pow(2, two_exponent-1-i)*n_samps*n_vars;
-        // required_threads = lagrange_size/pow(2, i+2);
+        required_threads = lagrange_size/2;
         threadsPerBlock = required_threads>256? 256 : required_threads;
         blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
 
-        // printf("required_threads: %i threadsPerBlock: %i blocksPerGrid %i \n", required_threads, threadsPerBlock, blocksPerGrid);
+        int pol_size = 1<<(i+2);
 
-        lagrange_convolution<<<blocksPerGrid, threadsPerBlock>>>(d_lagrange, d_lagrange_tmp, i, required_threads);
-        std::swap(d_lagrange, d_lagrange_tmp);
+        do_bulk_ntt(d_lagrange, d_lagrange_tmp, n_samps, n_vars, i, ws, prime); // doesnt account for higher dimensions
 
-        // CUDA_SAFE_CALL(cudaDeviceSynchronize());
+        // std::swap(d_lagrange, d_lagrange_tmp);
+
+        CUDA_SAFE_CALL(cudaDeviceSynchronize());
+        CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, d_lagrange_tmp, bytes_lagrange, cudaMemcpyDeviceToHost));
+        print_vec(lagrange_polynomials, lagrange_size);
+
+        element_multiply<<<blocksPerGrid, threadsPerBlock>>>(d_lagrange_tmp, pol_size, prime, required_threads);
+        // std::swap(d_lagrange, d_lagrange_tmp);
+
+        CUDA_SAFE_CALL(cudaDeviceSynchronize());
+        CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, d_lagrange_tmp, bytes_lagrange, cudaMemcpyDeviceToHost));
+        print_vec(lagrange_polynomials, lagrange_size);
+
+
+        do_bulk_ntt(d_lagrange_tmp, d_lagrange, n_samps, n_vars, i, ws, prime, true);
+
+        CUDA_SAFE_CALL(cudaDeviceSynchronize());
+        CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, d_lagrange, bytes_lagrange, cudaMemcpyDeviceToHost));
+        print_vec(lagrange_polynomials, lagrange_size);
     }
-    std::swap(d_lagrange, d_lagrange_tmp);
+    // std::swap(d_lagrange, d_lagrange_tmp);
 
     // CUDA_SAFE_CALL(cudaDeviceSynchronize());
     // CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, d_lagrange_tmp, bytes_lagrange, cudaMemcpyDeviceToHost));
 
+    int pol_size = (1<<two_exponent) + 1;
+    int pol_container_size = (1<<(two_exponent+2));
+    required_threads = pol_size*n_samps*n_vars;
+    threadsPerBlock = required_threads>256? 256 : required_threads;
+    blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
 
+    compactify<<<blocksPerGrid, threadsPerBlock>>>(d_lagrange, d_lagrange_tmp, pol_size, pol_container_size, required_threads); // Inefficient but not that bad
+    std::swap(d_lagrange, d_lagrange_tmp);
+
+    CUDA_SAFE_CALL(cudaDeviceSynchronize());
+    CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, d_lagrange, bytes_lagrange, cudaMemcpyDeviceToHost));
+    print_vec(lagrange_polynomials, lagrange_size);
 
     // Perform multidimensional interpolation
     required_threads = probe_len;
@@ -447,7 +515,7 @@ void multi_interp(int n_vars, int two_exponent)
     blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
     for (int i=0; i<n_vars; i++)
     {
-        get_lagrange_coeffs_nd<<<blocksPerGrid, threadsPerBlock>>>(d_xs, d_probes, d_probes_2, d_lagrange, i, n_vars, n_samps, two_exponent, required_threads);
+        get_lagrange_coeffs_nd<<<blocksPerGrid, threadsPerBlock>>>(d_xs, d_probes, d_probes_2, d_lagrange, i, n_vars, n_samps, two_exponent, prime, required_threads);
         std::swap(d_probes, d_probes_2);
         // CUDA_SAFE_CALL(cudaDeviceSynchronize());
 
@@ -476,7 +544,7 @@ void multi_interp(int n_vars, int two_exponent)
     // }
 
     std::vector<std::string> vars = {"x", "y", "z"};
-    std::string poly = nd_poly_to_string_flat(probe_vec, vars, n_samps);
+    std::string poly = nd_poly_to_string_flat(probe_vec, vars, n_samps, prime);
     std::cout << std::endl << poly << std::endl;
 
     // Free memory on the device

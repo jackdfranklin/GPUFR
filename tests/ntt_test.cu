@@ -152,8 +152,8 @@ TEST_CASE("ntt_bulk"){
 
     std::vector<u32> ws = get_w("./precomp/primes_roots_13.csv", 0);
     u32 prime = ws[0];
-    do_bulk_ntt(d_in_arr, d_out_arr, n_samps, 0, ws, prime);
-    do_bulk_ntt(d_out_arr, d_in_arr, n_samps, 0, ws, prime, true);
+    do_bulk_ntt(d_in_arr, d_out_arr, n_samps, 1, 0, ws, prime);
+    do_bulk_ntt(d_out_arr, d_in_arr, n_samps, 1, 0, ws, prime, true);
 
     CUDA_SAFE_CALL(cudaMemcpy(out_arr, d_in_arr, bytes_arr, cudaMemcpyDeviceToHost));
 

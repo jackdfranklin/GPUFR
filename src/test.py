@@ -14,7 +14,7 @@ def ntt_test():
     prime_no = 1000071169
     
     # ntt 
-    transform = ntt(seq, prime_no) 
+    transform = ntt(seq, prime_no) # Note sympy.ntt seems to get the output coefficients in the wrong orders
     print ("NTT : ", transform) 
     
 def bit_rev(number, size_log2):

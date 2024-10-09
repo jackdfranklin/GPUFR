@@ -192,12 +192,12 @@ void do_ntt(u32* &cu_array, u32* &cu_output, int arr_size, std::vector<u32> ws, 
     std::swap(cu_array, cu_output);
 }
 
-void do_bulk_ntt(u32* &cu_array, u32* &cu_output, int num_samps, int mult_depth, std::vector<u32> ws, u32 prime, bool inverse)
+void do_bulk_ntt(u32* &cu_array, u32* &cu_output, int num_samps, int dimension, int mult_depth, std::vector<u32> ws, u32 prime, bool inverse)
 {
     int pol_width = 1<<(mult_depth+2);
     int initial_pol_size = 4;
     int num_levels = log2(pol_width);
-    int array_len = num_samps*(num_samps-1)*initial_pol_size;
+    int array_len = dimension*num_samps*(num_samps-1)*initial_pol_size;
 
     u32 w;
     if (inverse)
