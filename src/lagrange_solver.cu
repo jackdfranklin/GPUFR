@@ -435,7 +435,7 @@ void reduce_denoms(u32* denoms, u32* denoms_tmp, int n_samps, int n_vars, int pr
         reduce_denoms_level<<<blocksPerGrid, threadsPerBlock>>>(denoms_tmp, n_samps, n_vars, i, prime, required_threads);
     }
 
-    required_threads = (n_samps-1)*n_samps*n_vars;
+    required_threads = n_samps*n_vars;
     threadsPerBlock = required_threads>256? 256 : required_threads;
     blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
 
@@ -520,17 +520,17 @@ void multi_interp(int n_vars, int two_exponent)
     cudaStreamSynchronize(stream1);
     cudaStreamSynchronize(stream2);
 
-    CUDA_SAFE_CALL(cudaDeviceSynchronize());
-    CUDA_SAFE_CALL(cudaDeviceSynchronize());
-    CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, d_lagrange_tmp, bytes_lagrange, cudaMemcpyDeviceToHost));
-    print_vec(lagrange_polynomials, lagrange_size, prime);
+    // CUDA_SAFE_CALL(cudaDeviceSynchronize());
+    // CUDA_SAFE_CALL(cudaDeviceSynchronize());
+    // CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, d_lagrange_tmp, bytes_lagrange, cudaMemcpyDeviceToHost));
+    // print_vec(lagrange_polynomials, lagrange_size, prime);
 
     reduce_denoms(d_denoms, d_lagrange_tmp, n_samps, n_vars, prime);
 
-    CUDA_SAFE_CALL(cudaDeviceSynchronize());
-    CUDA_SAFE_CALL(cudaDeviceSynchronize());
-    CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, d_denoms, bytes_denoms, cudaMemcpyDeviceToHost));
-    print_vec(lagrange_polynomials, n_samps*n_vars, prime);
+    // CUDA_SAFE_CALL(cudaDeviceSynchronize());
+    // CUDA_SAFE_CALL(cudaDeviceSynchronize());
+    // CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, d_denoms, bytes_denoms, cudaMemcpyDeviceToHost));
+    // print_vec(lagrange_polynomials, n_samps*n_vars, prime);
 
 
     for (int i=0; i<two_exponent; i++)
