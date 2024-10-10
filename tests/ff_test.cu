@@ -57,7 +57,7 @@ __global__ void ff_divide_test(u32 p, u32 *a, u32 *b, u32 *c){
 
 TEST_CASE("First Test", "[Finite Field]"){
 	// The setup is repeated before running each section
-	std::array<u32, 3> p_array = {13, 2546604103, 3998191247};
+	std::array<u32, 3> p_array = {13, 1000071169, 1000112129};
 
 	u32 number_of_values = 128;
 	std::vector<u32> a(number_of_values), b(number_of_values), c(number_of_values);
@@ -224,3 +224,8 @@ TEST_CASE("First Test", "[Finite Field]"){
 	cudaFree(d_c);
 
 }
+
+// TEST_CASE("second t"){
+// 	ff_multiply(1000071136, 750053377, 1000071169);
+// 	REQUIRE(false);
+// }

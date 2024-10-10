@@ -1,22 +1,35 @@
 #include "GPUFR/ff_math.cuh"
 #include "GPUFR/types.h"
+#include <stdio.h>
 
 __device__ u32 ff_add(u32 a, u32 b, u32 p){
-	u64 sum = (u64)a%p + (u64)b%p;	
-	return (u32)(sum%p);
+	u32 sum = a%p + b%p;	
+	return sum%p;
 }
 
 __device__ u32 ff_subtract(u32 a, u32 b, u32 p){
-	return ff_add(a, p - b%p, p);
+	u32 sub = a%p - b%p + p;
+	return sub%p;
 }
+
+// Doesnt seem to work for some numbers e.g. 1000071137*750053377 mod 1000071169
+// __host__ __device__ u32 ff_multiply_2(u32 a, u32 b, u32 p){
+// 	a = a%p;
+// 	b = b%p;
+// 	double x = static_cast<double>(a);
+// 	u32 c = static_cast<u32>( (x*b) / p );
+// 	u32 r = ((a*b) - (c*p)) % p;
+// 	return r;
+// }
 
 __device__ u32 ff_multiply(u32 a, u32 b, u32 p){
-	u64 prod = (u64)a * (u64)b;	
-	return (u32)(prod%(u64)p);
+	u64 prod = (u64)(a%p) * (u64)(b%p);
+	u32 res = (u32)(prod%(u64)p);
+	return res;
 }
 
 
-// TODO: do by squaring
+// Note that conditionals on the exp shouldnt cause warp divergences as the exp will match in every thread
 __device__ u32 ff_pow(u32 m, u32 exp, u32 p){
 	u32 result = 1;
 	if (exp > 0)
@@ -28,8 +41,6 @@ __device__ u32 ff_pow(u32 m, u32 exp, u32 p){
 			exp = exp>>1;
 			m = ff_multiply(m, m, p);
 		}
-	} else {
-		result = 1;
 	}
 	return result;
 }
@@ -40,26 +51,29 @@ __device__ u32 ff_divide(u32 a, u32 b, u32 p){
 }
 
 __device__ u32 modular_inverse(u32 a, u32 p){
+	u32 r1, r2, rTmp;
+	u32 q;
 
-	u64 r0 = a%p;
-	u64 r1 = p;
+	i32 t1, t2, tTmp;
 
-	i64 s0 = 1;
-	i64 s1 = 0;
+	r1 = p;
+	r2 = a%p;
 
-	while(r1){
-		u64 q = r0 / r1;
+	t1 = 0;
+	t2 = 1;
 
-		u64 r_temp = r0 - q * r1;
-		r0 = r1;
-		r1 = r_temp;
+	while (r2)
+	{
+		q = r1/r2;
 
-		i64 s_temp = s0 - q * s1;
-		s0 = s1;
-		s1 = s_temp;
+		rTmp = r2;
+		r2 = r1 - q*r2;
+		r1 = rTmp;
 
+		tTmp = t2;
+		t2 = t1 - q*t2;
+		t1 = tTmp;
 	}
 
-	return (u32)( (p + s0)%p );
-
+	return t1+p;
 }
