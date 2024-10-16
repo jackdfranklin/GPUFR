@@ -19,6 +19,6 @@
 
 TEST_CASE("Lagrange Interpolation"){
     printf("catch \n");
-    multi_interp(2, 10);
+    multi_interp(1, 2); // Dont necessarily need to computea all probes, could just copy a probe to padd out to a power of 2
     REQUIRE(true);
 }

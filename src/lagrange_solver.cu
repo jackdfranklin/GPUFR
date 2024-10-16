@@ -28,7 +28,7 @@ __device__ u32 fun(u32 *vars)
     u32 result;
     u32 x = *vars;
     u32 y = *(vars + 1);
-    result = x + y;
+    result = x;
     return result;
 }
 
@@ -89,7 +89,7 @@ __device__ u32 compute_denom_nd(int current_index, const u32 *xs, int dim, int n
 __global__ void get_lagrange_coeffs_nd(const u32 *xs, const u32 *denoms, u32 *ys, u32 *out, const u32 *lagrange, int dim, int n_vars, int n_samps, int two_exponent, u32 prime, int required_threads)
 {
     // Computes the coefficients to the Lagrange polynomials and writes them to ys
-    int idx = threadIdx.x + blockIdx.x * blockDim.x;
+    int idx = threadIdx.x + blockIdx.x * blockDim.x; // identifies a probe (x, y) pair
 
 
     if (idx < required_threads)
@@ -116,7 +116,7 @@ __global__ void get_lagrange_coeffs_nd(const u32 *xs, const u32 *denoms, u32 *ys
         int index_xs = dim*n_samps + static_cast<int>((idx/pow(n_samps, dim)))%n_samps;
 
         // Make more parallel
-        for (int i=0; i<n_samps; i++)
+        for (int i=0; i<n_samps; i++) // Loop over each term e.g. x^2 + x + 1
         {
             // Takes each term in the lagrange polynomial and adds it to the correct location in the output array
             int flat_index_ys = start_index_ys+i*index_step_ys;
@@ -444,6 +444,85 @@ void reduce_denoms(u32* denoms, u32* denoms_tmp, int n_samps, int n_vars, int pr
     copy_denoms<<<blocksPerGrid, threadsPerBlock>>>(denoms, denoms_tmp, stride, required_threads);
 }
 
+__global__ void compute_sub_pols(u32* lagrange, u32* lagrange_tmp, u32* denom, u32* probes, int probe_stride, int n_samps, u32 prime, int required_threads)
+{
+    int idx = threadIdx.x + blockIdx.x * blockDim.x;
+
+    if (idx < required_threads)
+    {
+        int probe_index = idx/(n_samps);
+
+        lagrange_tmp[idx] = ff_multiply(probes[probe_index*probe_stride], ff_divide(lagrange[idx], denom[probe_index*probe_stride], prime), prime);
+    }
+}
+
+__global__ void reduce_lagrange_level(u32* lagrange, int n_samps, int n_vars, int level, u32 prime, int required_threads)
+{
+    int idx = threadIdx.x + blockIdx.x * blockDim.x;
+
+    if (idx < required_threads)
+    {
+        // int sub_step = 1<<(level)*n_samps;
+        int stride = (level+1)*n_samps;
+        int start_index = idx%n_samps + (idx/n_samps)*(2*stride);
+
+        // int over_stride = (level+1)*n_samps;
+
+        u32 in_1 = lagrange[start_index];
+        u32 in_2 = lagrange[start_index+stride];
+
+        printf("level: %i in1: %i in2: %i start_index: %i, start_index+sub_step: %i \n", level, in_1, in_2, start_index, start_index+stride);
+
+        lagrange[start_index] = ff_add(in_1, in_2, prime);
+    }
+}
+
+__global__ void reduce_lagrange_final(u32* lagrange, u32* probes, int probe_stride, int n_samps, u32 prime, int required_threads)
+{
+    int idx = threadIdx.x + blockIdx.x * blockDim.x;
+
+    if (idx < required_threads)
+    {
+        int sub_step = n_samps;
+
+        u32 in_1 = lagrange[idx];
+        u32 in_2 = lagrange[idx+sub_step];
+
+        probes[idx*probe_stride] = ff_add(in_1, in_2, prime);
+    }
+}
+
+// Fills in a row in the new probe matrix by reducing the sum of lagrange polynomials to a single polynomial
+void reduce_lagrange(u32* lagrange, u32* lagrange_tmp, u32* denoms, u32* probes, int probe_stride, int n_samps, int n_vars, u32 prime)
+{
+    int iterations = log2(n_samps-1);
+
+    int required_threads, threadsPerBlock, blocksPerGrid;
+
+    // Start with second polynomial to give a power of 2, add on first at the end
+    u32* lagrange_even = lagrange+n_samps;
+    u32* lagrange_tmp_even = lagrange_tmp+n_samps;
+
+    required_threads = (n_samps)*n_samps;
+    threadsPerBlock = required_threads>256? 256 : required_threads;
+    blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
+
+    compute_sub_pols<<<blocksPerGrid, threadsPerBlock>>>(lagrange, lagrange_tmp, denoms, probes, probe_stride, n_samps, prime, required_threads);
+
+    for (int i=0; i<iterations; i++)
+    {
+        required_threads = (1<<(iterations-i-1))*n_samps;
+        threadsPerBlock = required_threads>256? 256 : required_threads;
+        blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
+
+        reduce_lagrange_level<<<blocksPerGrid, threadsPerBlock>>>(lagrange_tmp_even, n_samps, n_vars, i, prime, required_threads);
+        // std::swap(lagrange_even, lagrange_tmp_even);
+        // std::swap(lagrange, lagrange_tmp);
+    }
+
+    reduce_lagrange_final<<<blocksPerGrid, threadsPerBlock>>>(lagrange_tmp, probes, probe_stride, n_samps, prime, required_threads);
+}
+
 
 // TDOD: either switch to Karatsuba algorithm or FFT use Barett algorithm for division
 void multi_interp(int n_vars, int two_exponent)
@@ -568,7 +647,7 @@ void multi_interp(int n_vars, int two_exponent)
     // CUDA_SAFE_CALL(cudaDeviceSynchronize());
     // CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, d_lagrange_tmp, bytes_lagrange, cudaMemcpyDeviceToHost));
 
-    int pol_size = (1<<(two_exponent+1));
+    int pol_size = n_samps;
     int pol_container_size = (1<<(two_exponent+2));
     required_threads = pol_size*n_samps*n_vars;
     threadsPerBlock = required_threads>256? 256 : required_threads;
@@ -577,9 +656,9 @@ void multi_interp(int n_vars, int two_exponent)
     compactify<<<blocksPerGrid, threadsPerBlock>>>(d_lagrange, d_lagrange_tmp, pol_size, pol_container_size, required_threads); // Inefficient but not that bad
     std::swap(d_lagrange, d_lagrange_tmp);
 
-    // CUDA_SAFE_CALL(cudaDeviceSynchronize());
-    // CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, d_lagrange, bytes_lagrange, cudaMemcpyDeviceToHost));
-    // print_vec(lagrange_polynomials, lagrange_size, prime);
+    CUDA_SAFE_CALL(cudaDeviceSynchronize());
+    CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, d_lagrange, bytes_lagrange, cudaMemcpyDeviceToHost));
+    print_vec(lagrange_polynomials, lagrange_size, prime);
 
     // Perform multidimensional interpolation
     required_threads = probe_len;
@@ -587,15 +666,27 @@ void multi_interp(int n_vars, int two_exponent)
     blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
     for (int i=0; i<n_vars; i++)
     {
-        get_lagrange_coeffs_nd<<<blocksPerGrid, threadsPerBlock>>>(d_xs, d_denoms, d_probes, d_probes_2, d_lagrange, i, n_vars, n_samps, two_exponent, prime, required_threads);
-        std::swap(d_probes, d_probes_2);
+        // get_lagrange_coeffs_nd<<<blocksPerGrid, threadsPerBlock>>>(d_xs, d_denoms, d_probes, d_probes_2, d_lagrange, i, n_vars, n_samps, two_exponent, prime, required_threads);
+        // std::swap(d_probes, d_probes_2);
         // CUDA_SAFE_CALL(cudaDeviceSynchronize());
+        int lagrange_sub_start = n_samps*n_samps*i;
+        int denoms_sub_start = n_samps*i;
 
+        u32 *d_lagrange_sub = d_lagrange+lagrange_sub_start;
+        u32 *d_lagrange_tmp_sub = d_lagrange+lagrange_sub_start;
+
+        u32* d_denoms_sub = d_denoms+denoms_sub_start;
+
+        int probe_stride = pow(n_samps, i);
+
+        reduce_lagrange(d_lagrange, d_lagrange_tmp, d_denoms, d_probes, probe_stride, n_samps, n_vars, prime);
     }
 
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
     CUDA_SAFE_CALL(cudaMemcpy(probes, d_probes, bytes_probes, cudaMemcpyDeviceToHost));
-    // CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, d_lagrange, bytes_lagrange, cudaMemcpyDeviceToHost));
+    CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, d_lagrange_tmp, bytes_lagrange, cudaMemcpyDeviceToHost));
+    print_vec(lagrange_polynomials, lagrange_size, prime);
+
 
     std::vector<double> probe_vec(probe_len);
     for (int i=0; i<probe_len; i++)
