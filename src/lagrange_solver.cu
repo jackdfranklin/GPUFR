@@ -530,7 +530,7 @@ __global__ void reduce_sum_kernel(u32 *lagrange, u32* probes, u32 *output_probes
 
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
     int lane_id = tid % warp_size_mask;       // Lane within the warp
-    int warp_id = tid / warp_size_mask;    // Warp ID within the block
+    int warp_id = (tid / warp_size_mask)%(blockDim.x/warp_size_mask);    // Warp ID within the block
     int mask_lane_id = tid % (n_samps-1);
     int mask_warp_id = tid / (n_samps-1);
 
@@ -551,7 +551,7 @@ __global__ void reduce_sum_kernel(u32 *lagrange, u32* probes, u32 *output_probes
             sum = ff_add(sum, ff_multiply(lagrange[lagrange_index], probes[probe_index], prime), prime);
             // if (dim == 1)
                 // sum = ff_add(0, ff_multiply(1, probes[probe_index], prime), prime);
-            printf("tid %i warp_id %i lane_id %i probe_index %i lagrange_index %i sum %i \n", tid, warp_id, lane_id, probe_index, lagrange_index, as_int(sum, prime));
+            // printf("tid %i warp_id %i lane_id %i probe_index %i lagrange_index %i sum %i \n", tid, warp_id, lane_id, probe_index, lagrange_index, as_int(sum, prime));
 
         }
         // sum = ff_multiply(lagrange[lagrange_index], 1, prime);
@@ -563,7 +563,7 @@ __global__ void reduce_sum_kernel(u32 *lagrange, u32* probes, u32 *output_probes
             u32 a = sum;
             u32 to_add = __shfl_down_sync(0xFFFFFFFF, sum, sum_step);
             sum = ff_add(sum, __shfl_down_sync(0xFFFFFFFF, sum, sum_step), prime);
-            printf("warpid %i laneid %i tid %i sumstep %i completed_reductions %i readidx %i a %i b %i sum %i \n", warp_id, lane_id, tid, sum_step, completed_reductions, tid + sum_step+1, as_int(a, prime), as_int(to_add, prime), as_int(sum, prime));
+            // printf("warpid %i laneid %i tid %i sumstep %i completed_reductions %i readidx %i a %i b %i sum %i \n", warp_id, lane_id, tid, sum_step, completed_reductions, tid + sum_step+1, as_int(a, prime), as_int(to_add, prime), as_int(sum, prime));
         }
 
         // u32 a = sum;
@@ -574,17 +574,17 @@ __global__ void reduce_sum_kernel(u32 *lagrange, u32* probes, u32 *output_probes
 
         if (lane_id == 0) {
             shared_data[warp_id] = sum;  // Each warp writes its partial sum to shared memory
-            printf("warpid %i tid %i sum %i \n", warp_id, tid, as_int(sum, prime));
+            // printf("warpid %i tid %i sum %i \n", warp_id, tid, as_int(sum, prime));
         }
     }
-    // __syncthreads();  // Synchronize threads in the block
+    __syncthreads();  // Synchronize threads in the block
     if (tid < required_threads && lane_id == 0)
     {
         // Intra block sum
         for (int i=0; i<total_reductions-completed_reductions; i++) {
             sum_step = (1<<i);
             sum = ff_add(sum, shared_data[warp_id + sum_step], prime);
-            printf("tid %i warpid %i sum_step %i \n", tid, warp_id, sum_step);
+            // printf("tid %i warpid %i sum_step %i \n", tid, warp_id, sum_step);
             // print_vec(shared_data, 3, prime);
         }
 
@@ -598,7 +598,7 @@ __global__ void reduce_sum_kernel(u32 *lagrange, u32* probes, u32 *output_probes
             // sum = ff_add(sum, ff_multiply(lagrange[lagrange_index], 1, prime), prime);
 
             sum = ff_add(sum, ff_multiply(lagrange[lagrange_index], probes[probe_index], prime), prime);
-            printf("tid %i warpidMaxk %i warpid %i a %i b %i sum %i \n", tid, mask_warp_id, warp_id, as_int(a, prime), as_int(to_add, prime), as_int(sum, prime));
+            // printf("tid %i warpidMaxk %i warpid %i a %i b %i sum %i \n", tid, mask_warp_id, warp_id, as_int(a, prime), as_int(to_add, prime), as_int(sum, prime));
 
 
             // printf("warpid %i laneid %i tid %i completed_reductions %i readidx %i a %i b %i sum %i \n", warp_id, lane_id, tid, completed_reductions, tid + sum_step+1, as_int(a, prime), as_int(to_add, prime), as_int(sum, prime));
@@ -664,10 +664,10 @@ void reduce_lagrange_nd(u32* lagrange, u32* lagrange_tmp, u32* denoms, u32* prob
 
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
     CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, lagrange_tmp, required_threads*sizeof(u32), cudaMemcpyDeviceToHost));
-    print_vec(lagrange_polynomials, required_threads, prime);
+    // print_vec(lagrange_polynomials, required_threads, prime);
 
     required_threads = (n_samps-1)*pow(n_samps, n_vars);
-    threadsPerBlock = required_threads>4? 4 : required_threads;
+    threadsPerBlock = required_threads>256? 256 : required_threads;
     blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
 
     printf("dim %i threadsPerBlock %i required_threads %i blocksPerGrid %i n_samps %i \n\n", dim, threadsPerBlock, required_threads, blocksPerGrid, n_samps);
@@ -837,7 +837,7 @@ void multi_interp(int n_vars, int two_exponent)
         std::swap(d_probes, d_probes_2);
 
         CUDA_SAFE_CALL(cudaMemcpy(probes, d_probes, bytes_probes, cudaMemcpyDeviceToHost));        
-        print_vec(probes, probe_len, prime);
+        // print_vec(probes, probe_len, prime);
 
 
 
@@ -852,7 +852,7 @@ void multi_interp(int n_vars, int two_exponent)
     std::vector<double> probe_vec(probe_len);
     for (int i=0; i<probe_len; i++)
     {
-        std::cout << "probe: " << probes[i] << " ";
+        // std::cout << "probe: " << probes[i] << " ";
         probe_vec[i] = probes[i];
     }
 
