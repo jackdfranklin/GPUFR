@@ -574,6 +574,8 @@ __global__ void reduce_sum_kernel(u32 *lagrange, u32* probes, u32 *output_probes
 
         if (lane_id == 0) {
             shared_data[warp_id] = sum;  // Each warp writes its partial sum to shared memory
+            if (mask_warp_id==0)
+                printf("tid %i warpid %i sum %i \n", tid, warp_id, sum);
             // printf("warpid %i tid %i sum %i \n", warp_id, tid, as_int(sum, prime));
         }
     }
@@ -584,7 +586,9 @@ __global__ void reduce_sum_kernel(u32 *lagrange, u32* probes, u32 *output_probes
         for (int i=0; i<total_reductions-completed_reductions; i++) {
             sum_step = (1<<i);
             sum = ff_add(sum, shared_data[warp_id + sum_step], prime);
-            // printf("tid %i warpid %i sum_step %i \n", tid, warp_id, sum_step);
+            if (mask_warp_id==0)
+                printf("tid %i warpid %i sum_step %i sum %i \n", tid, warp_id, sum_step, sum);
+
             // print_vec(shared_data, 3, prime);
         }
 
@@ -647,6 +651,7 @@ void reduce_lagrange(u32* lagrange, u32* lagrange_tmp, u32* denoms, u32* probes,
     reduce_lagrange_final<<<blocksPerGrid, threadsPerBlock>>>(lagrange_tmp, probes, probe_stride, n_samps, prime, required_threads);
 }
 
+// TODO: make required threads a long
 // Fills in a row in the new probe matrix by reducing the sum of lagrange polynomials to a single polynomial
 void reduce_lagrange_nd(u32* lagrange, u32* lagrange_tmp, u32* denoms, u32* probes, u32* probes_tmp, int n_samps, int n_vars, int dim, u32 prime)
 {
@@ -666,8 +671,9 @@ void reduce_lagrange_nd(u32* lagrange, u32* lagrange_tmp, u32* denoms, u32* prob
     CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, lagrange_tmp, required_threads*sizeof(u32), cudaMemcpyDeviceToHost));
     // print_vec(lagrange_polynomials, required_threads, prime);
 
-    required_threads = (n_samps-1)*pow(n_samps, n_vars);
-    threadsPerBlock = required_threads>256? 256 : required_threads;
+    int defaultThreadsPerBlock = 256;
+    required_threads = (n_samps-1)<defaultThreadsPerBlock? (n_samps-1)*pow(n_samps, n_vars) : defaultThreadsPerBlock*pow(n_samps, n_vars);
+    threadsPerBlock = required_threads>defaultThreadsPerBlock? defaultThreadsPerBlock : required_threads;
     blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
 
     printf("dim %i threadsPerBlock %i required_threads %i blocksPerGrid %i n_samps %i \n\n", dim, threadsPerBlock, required_threads, blocksPerGrid, n_samps);
