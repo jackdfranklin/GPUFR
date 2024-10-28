@@ -28,7 +28,7 @@ __device__ u32 fun(u32 *vars)
     u32 result;
     u32 x = *vars;
     // u32 y = *(vars + 1);
-    result = 1;
+    result = x;
     return result;
 }
 
@@ -758,7 +758,7 @@ void multi_interp(int n_vars, int two_exponent)
     u32* xs = new u32[n_vars*n_samps];
     std::srand(time(0));
 
-    std::vector<u32> ws = get_w("./precomp/primes_roots_13.csv", 0);
+    std::vector<u32> ws = get_w("./precomp/primes_roots_14.csv", 0);
     u32 prime = ws[0];
 
     for (int i=0; i<n_vars; i++)

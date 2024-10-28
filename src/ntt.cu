@@ -200,6 +200,7 @@ void do_bulk_ntt(u32* &cu_array, u32* &cu_output, int num_samps, int dimension, 
     int array_len = dimension*num_samps*(num_samps-1)*initial_pol_size;
 
     u32 w;
+    printf("ws: %i \n", ws[num_levels]);
     if (inverse)
     {
         w = ff_divide(1, ws[num_levels], prime);
