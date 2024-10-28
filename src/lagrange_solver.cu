@@ -19,8 +19,8 @@ __host__ __device__ void print_vec(const u32* vec, int size, u32 prime)
     {
         printf("%i, ", as_int(vec[i], prime));
     }
-    printf("\n");
-    printf("\n");
+    // printf("\n");
+    // printf("\n");
 }
 
 __device__ u32 fun(u32 *vars)
@@ -28,7 +28,7 @@ __device__ u32 fun(u32 *vars)
     u32 result;
     u32 x = *vars;
     // u32 y = *(vars + 1);
-    result = 0;
+    result = 1;
     return result;
 }
 
@@ -94,7 +94,7 @@ __global__ void get_lagrange_coeffs_nd(const u32 *xs, const u32 *denoms, u32 *ys
 
     if (idx < required_threads)
     {
-        int pol_size = (1<<two_exponent) + 1; // equivelent to pow(2, two_exponent) + 1
+        int pol_size = (1<<two_exponent) + 1; // equivelent to pow(2, two_exponent) + 1 
         int step_size = 2*(n_samps-1) - pol_size;
 
         // if (idx == 1){
@@ -526,13 +526,15 @@ __device__ int get_lagrange_read_index(int warp_id, int lane_id, int n_samps, in
 __global__ void reduce_sum_kernel(u32 *lagrange, u32* probes, u32 *output_probes, int n_samps, int n_vars, int dim, int probe_step, int probe_step_large, int exponent, u32 prime, int required_threads) {
     __shared__ u32 shared_data[32];  // Shared memory for inter-warp reduction, assuming max 32 warps per block
 
-    int warp_size_mask = n_samps<32? n_samps-1 : warpSize;
+    int warp_size_mask = n_samps<warpSize? n_samps-1 : warpSize;
 
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
     int lane_id = tid % warp_size_mask;       // Lane within the warp
     int warp_id = (tid / warp_size_mask)%(blockDim.x/warp_size_mask);    // Warp ID within the block
-    int mask_lane_id = tid % (n_samps-1);
-    int mask_warp_id = tid / (n_samps-1);
+
+    int block_size = (n_samps-1)<blockDim.x? (n_samps-1) : blockDim.x;
+    int mask_lane_id = tid % block_size;
+    int mask_warp_id = tid / block_size;
 
     int total_reductions = exponent<10? exponent: 10; // Assuming a box size of 1024 = 2^10 threds
     int completed_reductions = 0;
@@ -587,33 +589,56 @@ __global__ void reduce_sum_kernel(u32 *lagrange, u32* probes, u32 *output_probes
         if (lane_id == 0)
         {
             shared_data[warp_id] = sum;
+            if (mask_warp_id == 5)
+                printf("%i, ", shared_data[warp_id]);
         }
         __syncthreads();
+        if (mask_warp_id == 5 && lane_id == 0 && mask_lane_id ==0)
+            printf("\n");
+        if (warp_id == 0)
+        {
+            sum = shared_data[lane_id];
+            if (mask_warp_id == 5)
+            {
+                printf("%i, ", shared_data[lane_id]);
+                // print_vec(shared_data, 32, prime);
+            }
+        }
 
 
         // Intra block sum
         for (int i=0; i<total_reductions-completed_reductions; i++)
         {
-            if (lane_id == 0)
-            {
-                shared_data[warp_id] = sum;
-                if (sum != 0 || shared_data[warp_id] != 0)
-                    printf("tid %i warpid %i shared %i sum %i \n", tid, warp_id, shared_data[warp_id], sum);
-            }
-            __syncthreads();
-            if (lane_id == 0)
+            // if (warp_id == 0)
+            // {
+            //     // if (sum != 0 || shared_data[lane_id] != 0)
+            //         // printf("tid %i warpid %i shared %i sum %i \n", tid, warp_id, shared_data[warp_id], sum);
+            // }
+            // __syncthreads();
+            if (warp_id == 0)
             {
                 sum_step = (1<<i);
-                if (warp_id + sum_step < 32) {
                 u32 a = sum;
-                u32 shred = shared_data[warp_id + sum_step];
-                // sum = ff_add(sum, shared_data[warp_id + sum_step], prime);
-                if (mask_warp_id==63)
-                    printf("tid %i warpid %i sum_step %i a %i shared %i sum %i \n", tid, warp_id, sum_step, a, shred, sum);
-                }
-            }
+                u32 shred = shared_data[lane_id + sum_step];
+                sum = ff_add(sum, __shfl_down_sync(0xFFFFFFFF, sum, sum_step), prime);
 
+                // sum = ff_add(sum, shared_data[lane_id + sum_step], prime);
+                // shared_data[lane_id] = sum;
+                // if (mask_warp_id==63)
+                    // printf("tid %i warpid %i sum_step %i a %i shared %i sum %i \n", tid, warp_id, sum_step, a, shred, sum);
+            }
             // print_vec(shared_data, 3, prime);
+        }
+
+        if (warp_id == 0)
+        {
+            shared_data[lane_id] = sum;
+        }
+        __syncthreads();
+
+        if (lane_id == 0)
+        {
+            sum = shared_data[warp_id];
         }
 
         if (lane_id == 0 && mask_lane_id == 0)
@@ -696,7 +721,7 @@ void reduce_lagrange_nd(u32* lagrange, u32* lagrange_tmp, u32* denoms, u32* prob
     CUDA_SAFE_CALL(cudaMemcpy(lagrange_polynomials, lagrange_tmp, required_threads*sizeof(u32), cudaMemcpyDeviceToHost));
     // print_vec(lagrange_polynomials, required_threads, prime);
 
-    int defaultThreadsPerBlock = 64;
+    int defaultThreadsPerBlock = 1024;
     required_threads = (n_samps-1)<defaultThreadsPerBlock? (n_samps-1)*pow(n_samps, n_vars) : defaultThreadsPerBlock*pow(n_samps, n_vars);
     threadsPerBlock = required_threads>defaultThreadsPerBlock? defaultThreadsPerBlock : required_threads;
     blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
