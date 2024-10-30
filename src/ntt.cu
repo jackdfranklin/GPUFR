@@ -10,7 +10,7 @@ __device__ int bit_reverseal(int index, int log_2n, int required_threads)
         for (unsigned int j = 0; j < log_2n; j++) {
             rev_index <<= 1;       // Shift result left
             rev_index |= (i & 1);  // Set the lowest bit of i in result
-            i >>= 1;            // Shift i right
+            i >>= 1;               // Shift i right
         }
     }
 

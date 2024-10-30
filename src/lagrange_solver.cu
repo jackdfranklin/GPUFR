@@ -23,16 +23,20 @@ __host__ __device__ void print_vec(const u32* vec, int size, u32 prime)
     // printf("\n");
 }
 
-__device__ u32 fun(u32 *vars)
+__device__ u32 fun(u32 *vars, u32 prime)
 {
     u32 result;
     u32 x = *vars;
     // u32 y = *(vars + 1);
-    result = x;
+    // result = ff_pow(x, 2, prime) + 2;
+    for (int i=0; i<(1<<12); i++)
+        {
+            result = ff_add(result, ff_multiply(i, ff_pow(x, i, prime), prime), prime);
+        }
     return result;
 }
 
-__global__ void compute_probes(const u32 *xs, u32 *probes, u32 *probes_2, int n_vars, int n_samps, int required_threads) {
+__global__ void compute_probes(const u32 *xs, u32 *probes, u32 *probes_2, int n_vars, int n_samps, u32 prime, int required_threads) {
     int i = blockDim.x * blockIdx.x + threadIdx.x;
 
     if (i < required_threads)
@@ -46,7 +50,7 @@ __global__ void compute_probes(const u32 *xs, u32 *probes, u32 *probes_2, int n_
             test_params[j] = xs[j*n_samps+dimension_index];
         }
             
-        probes[i] = fun(test_params);
+        probes[i] = fun(test_params, prime);
         probes_2[i] = 0;
     }
 }
@@ -665,7 +669,7 @@ void reduce_lagrange_nd(u32* lagrange, u32* lagrange_tmp, u32* denoms, u32* prob
 
 
 // TDOD: either switch to Karatsuba algorithm or FFT use Barett algorithm for division
-void multi_interp(int n_vars, int two_exponent)
+void multi_interp(int n_vars, int two_exponent, const std::string &ntt_primes)
 {
     int deviceCount = 0;
     CUDA_SAFE_CALL(cudaGetDeviceCount(&deviceCount));
@@ -686,7 +690,7 @@ void multi_interp(int n_vars, int two_exponent)
     u32* xs = new u32[n_vars*n_samps];
     std::srand(time(0));
 
-    std::vector<u32> ws = get_w("./precomp/primes_roots_14.csv", 0);
+    std::vector<u32> ws = get_w(ntt_primes, 0);
     u32 prime = ws[0];
 
     for (int i=0; i<n_vars; i++)
@@ -720,7 +724,7 @@ void multi_interp(int n_vars, int two_exponent)
     int blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
 
     // Computre all probes
-    compute_probes<<<blocksPerGrid, threadsPerBlock>>>(d_xs, d_probes, d_probes_2, n_vars, n_samps, required_threads);
+    compute_probes<<<blocksPerGrid, threadsPerBlock>>>(d_xs, d_probes, d_probes_2, n_vars, n_samps, prime, required_threads);
 
     required_threads = lagrange_size/initial_pol_size;
     threadsPerBlock = required_threads>256? 256 : required_threads;
@@ -792,6 +796,7 @@ void multi_interp(int n_vars, int two_exponent)
 
     // Free memory on the device
     CUDA_SAFE_CALL(cudaFree(d_xs));
+    CUDA_SAFE_CALL(cudaFree(d_denoms));
     CUDA_SAFE_CALL(cudaFree(d_probes));
     CUDA_SAFE_CALL(cudaFree(d_probes_2));
     CUDA_SAFE_CALL(cudaFree(d_lagrange));

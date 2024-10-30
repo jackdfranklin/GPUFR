@@ -19,6 +19,7 @@
 
 TEST_CASE("Lagrange Interpolation"){
     printf("catch \n");
-    multi_interp(1, 12); // Dont necessarily need to computea all probes, could just copy a probe to padd out to a power of 2
+    std::string ntt_primes = "./precomp/prime_roots_14.csv";
+    multi_interp(1, 1, ntt_primes); // Dont necessarily need to computea all probes, could just copy a probe to padd out to a power of 2
     REQUIRE(true);
 }
