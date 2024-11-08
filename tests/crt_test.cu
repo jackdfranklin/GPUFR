@@ -27,8 +27,6 @@ TEST_CASE("CRT Test"){
     u64* out_arr = new u64[arr_size];
     u32** mod_arrs = new u32*[n_moduli];
 
-    printf("base_arr %u \n", base_arr[0]);
-
     for (int i=0; i<n_moduli; i++)
         mod_arrs[i] = new u32[arr_size];
 
@@ -38,9 +36,6 @@ TEST_CASE("CRT Test"){
         for (int j=0; j<n_moduli; j++)
             mod_arrs[j][i] = base_arr[i]%primes[j];
     }
-
-    printf("mod_arrs %u %u \n", mod_arrs[0][0], mod_arrs[1][0]);
-
 
     compute_crt(mod_arrs, primes, out_arr, arr_size, n_moduli);
 
