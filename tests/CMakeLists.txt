@@ -37,6 +37,11 @@ target_link_libraries(ntt_test PRIVATE gpufr Catch2::Catch2WithMain ${FLINT_LINK
 target_include_directories(ntt_test PRIVATE ${FLINT_INCLUDE_DIRS})
 set_target_properties(ntt_test PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
+add_executable(crt_test crt_test.cu)
+target_link_libraries(crt_test PRIVATE gpufr Catch2::Catch2WithMain ${FLINT_LINK_LIBRARIES})
+target_include_directories(crt_test PRIVATE ${FLINT_INCLUDE_DIRS})
+set_target_properties(crt_test PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+
 # Register tests for ctest/make test to run
 add_test(NAME CudaTest COMMAND cuda_test) # Command can be a target
 add_test(NAME Ntt_test COMMAND ntt_test) # Command can be a target
@@ -44,3 +49,4 @@ add_test(NAME FiniteFieldTest COMMAND ff_test)
 add_test(NAME VandermondeSolverTest COMMAND vm_test)
 add_test(NAME UnivariateInterpolationTest COMMAND ui_test)
 add_test(NAME LagrangeInterpolationTest COMMAND lg_test)
+add_test(NAME ChineseRemainder_test COMMAND crt_test)
