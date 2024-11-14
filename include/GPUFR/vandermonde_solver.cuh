@@ -1,6 +1,6 @@
 #pragma once
 
-#include "GPUFR/types.h"
+#include "GPUFR/types.hpp"
 #include "GPUFR/ff_math.cuh"
 
 __device__ u32 master_poly_coefficient(u32 n, u32 i, u32 j, u32 *v, u32 *c, u32 p);

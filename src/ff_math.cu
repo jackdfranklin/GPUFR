@@ -1,6 +1,6 @@
 #include "GPUFR/ff_math.cuh"
-#include "GPUFR/types.h"
 #include <stdio.h>
+#include "GPUFR/types.hpp"
 
 __host__ __device__ u32 ff_add(u32 a, u32 b, u32 p){
 	u32 sum = a%p + b%p;	
