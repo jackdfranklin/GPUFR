@@ -10,7 +10,9 @@
 #include <vector>
 #include <cmath>
 #include <sstream>
-#include <iomanip> 
+#include <iomanip>
+
+#include <cuda.h>
 
 #include "GPUFR/ff_math.cuh"
 #include "GPUFR/cuda_safe_call.cuh"
@@ -33,5 +35,7 @@ void compute_lagrange_pol(const u32 *xs, u32 *lagrange, int dim, int n_vars, int
 std::string nd_poly_to_string_flat(const std::vector<double>& coef_flat, const std::vector<std::string>& variables, int n_samps, u32 prime);
 
 void multi_interp(int n_vars, int n_samps, const std::string& ntt_primes);
+
+void interpolate_dense(CUmodule& module, int n_vars, int two_exponent, const std::string &ntt_primes, u32* output);
 
 __host__ __device__ void print_vec(const u32* vec, int size, u32 prime);

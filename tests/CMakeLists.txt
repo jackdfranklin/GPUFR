@@ -27,7 +27,6 @@ target_link_libraries(ui_test PRIVATE gpufr Catch2::Catch2WithMain ${FLINT_LINK_
 target_include_directories(ui_test PRIVATE ${FLINT_INCLUDE_DIRS})
 set_target_properties(ui_test PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
-<<<<<<< HEAD
 add_executable(lg_test lagrange_test.cu)
 target_link_libraries(lg_test PRIVATE gpufr Catch2::Catch2WithMain ${FLINT_LINK_LIBRARIES})
 target_include_directories(lg_test PRIVATE ${FLINT_INCLUDE_DIRS})
@@ -42,7 +41,7 @@ add_executable(crt_test crt_test.cu)
 target_link_libraries(crt_test PRIVATE gpufr Catch2::Catch2WithMain ${FLINT_LINK_LIBRARIES})
 target_include_directories(crt_test PRIVATE ${FLINT_INCLUDE_DIRS})
 set_target_properties(crt_test PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-=======
+
 add_executable(parser_test parser_test.cpp)
 target_link_libraries(parser_test PRIVATE gpufr Catch2::Catch2WithMain ${FLINT_LINK_LIBRARIES} CUDA::nvrtc)
 target_include_directories(parser_test PRIVATE ${FLINT_INCLUDE_DIRS})
@@ -52,7 +51,11 @@ add_executable(bb_test bb_gen_test.cpp)
 target_link_libraries(bb_test PRIVATE gpufr Catch2::Catch2WithMain ${FLINT_LINK_LIBRARIES} CUDA::nvrtc)
 target_include_directories(bb_test PRIVATE ${FLINT_INCLUDE_DIRS})
 set_target_properties(bb_test PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
->>>>>>> feature/parser
+
+add_executable(parse_file parser_file.cpp)
+target_link_libraries(parse_file PRIVATE gpufr Catch2::Catch2WithMain ${FLINT_LINK_LIBRARIES} CUDA::nvrtc)
+target_include_directories(parse_file PRIVATE ${FLINT_INCLUDE_DIRS})
+set_target_properties(parse_file PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
 # Register tests for ctest/make test to run
 add_test(NAME CudaTest COMMAND cuda_test) # Command can be a target
@@ -60,10 +63,8 @@ add_test(NAME Ntt_test COMMAND ntt_test) # Command can be a target
 add_test(NAME FiniteFieldTest COMMAND ff_test) 
 add_test(NAME VandermondeSolverTest COMMAND vm_test)
 add_test(NAME UnivariateInterpolationTest COMMAND ui_test)
-<<<<<<< HEAD
 add_test(NAME LagrangeInterpolationTest COMMAND lg_test)
 add_test(NAME ChineseRemainder_test COMMAND crt_test)
-=======
 add_test(NAME ParserTest COMMAND parser_test)
 add_test(NAME BBGenTest COMMAND bb_test)
->>>>>>> feature/parser
+add_test(NAME parse_file COMMAND pf_test)

@@ -1,0 +1,3 @@
+add_executable(parsed_files_bb parsed_files_bb.cu)
+target_link_libraries(parsed_files_bb PRIVATE gpufr)
+set_target_properties(parsed_files_bb PROPERTIES CUDA_SEPARABLE_COMPILATION ON)

@@ -6,6 +6,8 @@
 #include <stack>
 #include <vector>
 
+#include <iostream>
+
 std::string gen_kernel(const std::vector<std::string> &vars){
 
 	std::string kernel_string = "						\n\
@@ -27,7 +29,51 @@ std::string gen_kernel(const std::vector<std::string> &vars){
 
 }
 
+std::string gen_kernel_nd(const std::vector<std::string> &vars){
+
+	std::string kernel_string = "						\n\
+	extern \"C\" __global__ void evaluate(u32* xs, u32 *probes, u32 *probes_2, int n_samps, u32 p){	\n\
+		size_t idx = threadIdx.x + blockIdx.x * blockDim.x; 		\n";
+
+	size_t n_vars = vars.size();
+
+	std::string var_string;
+
+	for(size_t vidx = 0; vidx < n_vars; vidx++){
+		var_string += "xs[static_cast<int>(floorf(idx/pow(n_samps, "+std::to_string(vidx)+".0))) % n_samps+" + std::to_string(vidx) + "*n_samps], ";
+	}
+
+	kernel_string += "probes[idx] = black_box("+var_string+"p);\n";
+	kernel_string += "probes_2[idx] = 0;}";
+
+	return kernel_string;
+
+}
+
 std::string cuda_from_expression(const std::string &expression, const std::vector<std::string> &vars){
+
+	std::string var_string;
+	for(auto var: vars){
+		var_string += "u32 " + var + ", ";
+	}
+
+	std::string program_string = "#include \"GPUFR/ff_math.cuh\"\n";
+	program_string += "#include \"GPUFR/types.hpp\"\n";
+	program_string += "#include <cmath>\n";
+	program_string += "__device__ u32 black_box(\n";
+	program_string += var_string;
+	program_string += "u32 p){\n";
+
+	program_string += "return ";
+	program_string += postfix_to_ff(parse_expression(expression)) + ";\n";
+	program_string += "}\n";
+
+	program_string += gen_kernel(vars);
+
+	return program_string;
+}
+
+std::string cuda_from_expression_nd(const std::string &expression, const std::vector<std::string> &vars){
 
 	std::string var_string;
 	for(auto var: vars){
@@ -44,7 +90,9 @@ std::string cuda_from_expression(const std::string &expression, const std::vecto
 	program_string += postfix_to_ff(parse_expression(expression)) + ";\n";
 	program_string += "}\n";
 
-	program_string += gen_kernel(vars);
+	program_string += gen_kernel_nd(vars);
+
+	std::cout << program_string << std::endl;
 
 	return program_string;
 }

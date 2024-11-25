@@ -1,0 +1,3 @@
+add_executable(benchmarking benchmarking.cu)
+target_link_libraries(benchmarking PRIVATE gpufr)
+set_target_properties(benchmarking PROPERTIES CUDA_SEPARABLE_COMPILATION ON)

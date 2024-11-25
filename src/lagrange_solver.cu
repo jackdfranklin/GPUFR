@@ -604,7 +604,7 @@ void multi_interp(int n_vars, int two_exponent, const std::string &ntt_primes)
     delete[] xs;
 }
 
-void interpolate_dense(int n_vars, int two_exponent, const std::string &ntt_primes, u32* output)
+void interpolate_dense(CUmodule& module, int n_vars, int two_exponent, const std::string &ntt_primes, u32* output)
 {
     int deviceCount = 0;
     CUDA_SAFE_CALL(cudaGetDeviceCount(&deviceCount));
@@ -658,8 +658,13 @@ void interpolate_dense(int n_vars, int two_exponent, const std::string &ntt_prim
     int threadsPerBlock = required_threads>256? 256 : required_threads;
     int blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
 
+    CUfunction kernel;
+    cuModuleGetFunction(&kernel, module, "evaluate");
+
     // Computre all probes
-    compute_probes<<<blocksPerGrid, threadsPerBlock>>>(d_xs, d_probes, d_probes_2, n_vars, n_samps, prime, required_threads);
+    // compute_probes<<<blocksPerGrid, threadsPerBlock>>>(d_xs, d_probes, d_probes_2, n_vars, n_samps, prime, required_threads);
+    void *args[] = {&d_xs, &d_probes, &d_probes_2, &n_samps, &prime};
+    cuLaunchKernel(kernel, blocksPerGrid, 1, 1, threadsPerBlock, 1, 1, 0, NULL, args, 0);
 
     required_threads = lagrange_size/initial_pol_size;
     threadsPerBlock = required_threads>256? 256 : required_threads;
@@ -718,6 +723,16 @@ void interpolate_dense(int n_vars, int two_exponent, const std::string &ntt_prim
 
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
     CUDA_SAFE_CALL(cudaMemcpy(output, d_probes, bytes_probes, cudaMemcpyDeviceToHost));
+
+    std::vector<double> probe_vec(probe_len);
+    for (int i=0; i<probe_len; i++)
+    {
+        probe_vec[i] = probes[i];
+    }
+
+    std::vector<std::string> vars = {"x", "y", "z"};
+    std::string poly = nd_poly_to_string_flat(probe_vec, vars, n_samps, prime);
+    std::cout << std::endl << poly << std::endl;
 
     // Free memory on the device
     CUDA_SAFE_CALL(cudaFree(d_xs));

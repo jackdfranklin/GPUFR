@@ -1,6 +1,6 @@
 #pragma once
 
-#include "GPUFR/types.h"
+#include "GPUFR/types.hpp"
 #include "GPUFR/ff_math.cuh"
 
 void print_vec(const u32* vec, int size);

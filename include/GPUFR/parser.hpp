@@ -6,6 +6,7 @@
 #include <string>
 
 std::string cuda_from_expression(const std::string &expression, const std::vector<std::string> &vars);
+std::string cuda_from_expression_nd(const std::string &expression, const std::vector<std::string> &vars);
 
 std::vector<std::string> parse_expression(const std::string &expression);
 

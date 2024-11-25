@@ -7,8 +7,8 @@ project(GPUFR VERSION 0.1
 set(CMAKE_CUDA_FLAGS_DEBUG "-G -g")
 
 # Release flags (add optimizations)
-set(CMAKE_CXX_FLAGS_RELEASE "-O3")
-set(CMAKE_CUDA_FLAGS_RELEASE "-O3")
+set(CMAKE_CXX_FLAGS_RELEASE " -g -G")
+set(CMAKE_CUDA_FLAGS_RELEASE " -g -G")
 find_package(CUDAToolkit REQUIRED)
 
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
