@@ -17,6 +17,7 @@
 #include "GPUFR/ff_math.cuh"
 #include "GPUFR/cuda_safe_call.cuh"
 #include "GPUFR/ntt.cuh"
+#include "GPUFR/detokenize.cuh"
 
 __device__ u32 fun(u32 *vars);
 
@@ -36,6 +37,6 @@ std::string nd_poly_to_string_flat(const std::vector<double>& coef_flat, const s
 
 void multi_interp(int n_vars, int n_samps, const std::string& ntt_primes);
 
-void interpolate_dense(CUmodule& module, int n_vars, int two_exponent, const std::string &ntt_primes, u32* output);
+void interpolate_dense(const std::vector<std::string> &tokens, const std::vector<std::string> &var_labels, int two_exponent, const std::string &ntt_primes, u32* results);
 
 __host__ __device__ void print_vec(const u32* vec, int size, u32 prime);

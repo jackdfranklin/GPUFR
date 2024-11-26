@@ -55,6 +55,24 @@ __global__ void compute_probes(const u32 *xs, u32 *probes, u32 *probes_2, int n_
     }
 }
 
+__global__ void compute_probes_tokens(const std::vector<std::string> &tokens, const std::vector<std::string> &var_labels, const u32 *xs, u32 *probes, u32 *probes_2, int n_vars, int n_samps, u32 prime, int required_threads) {
+    int i = blockDim.x * blockIdx.x + threadIdx.x;
+
+    if (i < required_threads)
+    {
+        u32 test_params[MAX_VARS];
+
+        for (int j=0; j<n_vars; j++)
+        {
+            float ifloat = i;
+            int dimension_index = static_cast<int>(floorf(ifloat/pow(n_samps, j))) % n_samps;//floorf((pow(n_samps, j)));
+            test_params[j] = xs[j*n_samps+dimension_index];
+        }
+            
+        probes[i] = detokenize(tokens, var_labels, test_params, prime);
+        probes_2[i] = 0;
+    }
+}
 
 __device__ void atomic_add(u32 *l_val, u32 r_val, u32 prime)
 {
@@ -604,7 +622,8 @@ void multi_interp(int n_vars, int two_exponent, const std::string &ntt_primes)
     delete[] xs;
 }
 
-void interpolate_dense(CUmodule& module, int n_vars, int two_exponent, const std::string &ntt_primes, u32* output)
+// TDOD: either switch to Karatsuba algorithm or FFT use Barett algorithm for division
+void interpolate_dense(const std::vector<std::string> &tokens, const std::vector<std::string> &var_labels, int two_exponent, const std::string &ntt_primes, u32* results)
 {
     int deviceCount = 0;
     CUDA_SAFE_CALL(cudaGetDeviceCount(&deviceCount));
@@ -614,6 +633,8 @@ void interpolate_dense(CUmodule& module, int n_vars, int two_exponent, const std
     if (deviceProp.concurrentKernels == 0) {
         std::cerr << "GPU does not support concurrent kernel execution!" << std::endl;
     }
+
+    int n_vars = var_labels.size();
 
     int n_samps = pow(2, two_exponent) + 1;
     int probe_len = pow(n_samps, n_vars);
@@ -658,13 +679,8 @@ void interpolate_dense(CUmodule& module, int n_vars, int two_exponent, const std
     int threadsPerBlock = required_threads>256? 256 : required_threads;
     int blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
 
-    CUfunction kernel;
-    cuModuleGetFunction(&kernel, module, "evaluate");
-
     // Computre all probes
-    // compute_probes<<<blocksPerGrid, threadsPerBlock>>>(d_xs, d_probes, d_probes_2, n_vars, n_samps, prime, required_threads);
-    void *args[] = {&d_xs, &d_probes, &d_probes_2, &n_samps, &prime};
-    cuLaunchKernel(kernel, blocksPerGrid, 1, 1, threadsPerBlock, 1, 1, 0, NULL, args, 0);
+    compute_probes_tokens<<<blocksPerGrid, threadsPerBlock>>>(tokens, var_labels, d_xs, d_probes, d_probes_2, n_vars, n_samps, prime, required_threads);
 
     required_threads = lagrange_size/initial_pol_size;
     threadsPerBlock = required_threads>256? 256 : required_threads;
@@ -722,12 +738,12 @@ void interpolate_dense(CUmodule& module, int n_vars, int two_exponent, const std
     }
 
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
-    CUDA_SAFE_CALL(cudaMemcpy(output, d_probes, bytes_probes, cudaMemcpyDeviceToHost));
+    CUDA_SAFE_CALL(cudaMemcpy(results, d_probes, bytes_probes, cudaMemcpyDeviceToHost));
 
     std::vector<double> probe_vec(probe_len);
     for (int i=0; i<probe_len; i++)
     {
-        probe_vec[i] = probes[i];
+        probe_vec[i] = results[i];
     }
 
     std::vector<std::string> vars = {"x", "y", "z"};
