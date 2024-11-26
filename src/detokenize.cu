@@ -1,12 +1,13 @@
 #include "GPUFR/detokenize.cuh"
 
+// subdivide token vector into simpler vectors and pass them to kernels
+// impliment a simple stack on the kernel cache
+
 __device__ u32 detokenize(const std::vector<std::string> &tokens, const std::vector<std::string> &var_labels, u32 *vars, u32 prime)
 {
-	std::stack<std::string> S;
-	std::stack<u32> US;
+	stack<u32> US;
 	for(auto token: tokens){
 		if(!is_operator(token)){
-			S.push(token);
             US.push(to_u32(token, vars, var_labels));
 		}
 		else{
@@ -20,7 +21,6 @@ __device__ u32 detokenize(const std::vector<std::string> &tokens, const std::vec
 	}
 
 	return US.top();
-	
 }
 
 __device__ u32 to_u32(std::string &token, u32 *vars, const std::vector<std::string> &var_labels)
@@ -31,7 +31,7 @@ __device__ u32 to_u32(std::string &token, u32 *vars, const std::vector<std::stri
         if (token == v)
         {
             int index = std::stoul(token.substr(1));
-            return vars[count];    
+            return vars[count];
         }
         count += 1;
     }
