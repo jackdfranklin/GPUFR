@@ -55,7 +55,7 @@ __global__ void compute_probes(const u32 *xs, u32 *probes, u32 *probes_2, int n_
     }
 }
 
-__global__ void compute_probes_tokens(const std::vector<std::string> &tokens, const std::vector<std::string> &var_labels, const u32 *xs, u32 *probes, u32 *probes_2, int n_vars, int n_samps, u32 prime, int required_threads) {
+__global__ void compute_probes_tokens(const cu_string<STRING_LEN>* tokens, const cu_string<STRING_LEN>* var_labels, int token_len, const u32 *xs, u32 *probes, u32 *probes_2, int n_vars, int n_samps, u32 prime, int required_threads) {
     int i = blockDim.x * blockIdx.x + threadIdx.x;
 
     if (i < required_threads)
@@ -69,7 +69,7 @@ __global__ void compute_probes_tokens(const std::vector<std::string> &tokens, co
             test_params[j] = xs[j*n_samps+dimension_index];
         }
             
-        probes[i] = detokenize(tokens, var_labels, test_params, prime);
+        probes[i] = detokenize(tokens, var_labels, token_len, n_vars, test_params, prime);
         probes_2[i] = 0;
     }
 }
@@ -680,6 +680,12 @@ void interpolate_dense(const std::vector<std::string> &tokens, const std::vector
     int blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
 
     // Computre all probes
+    cu_string<STRING_LEN>* cu_tokens = to_cu_string(tokens);
+    cu_string<STRING_LEN>* cu_var_labels = to_cu_string(var_labels);
+    cu_string<STRING_LEN>* d_cu_tokens, d_cu_var_labels;
+    CUDA_SAFE_CALL(cudaMalloc(&d_cu_tokens, tokens.size()*sizeof(cu_string<STRING_LEN>)));
+    CUDA_SAFE_CALL(cudaMalloc(&d_cu_var_labels, var_labels.size()*sizeof(cu_string<STRING_LEN>)));
+
     compute_probes_tokens<<<blocksPerGrid, threadsPerBlock>>>(tokens, var_labels, d_xs, d_probes, d_probes_2, n_vars, n_samps, prime, required_threads);
 
     required_threads = lagrange_size/initial_pol_size;
@@ -759,6 +765,7 @@ void interpolate_dense(const std::vector<std::string> &tokens, const std::vector
     CUDA_SAFE_CALL(cudaFree(d_lagrange_tmp));
 
     delete[] lagrange_polynomials;
+    delete[] cu_tokens;
     delete[] probes;
     delete[] xs;
 }

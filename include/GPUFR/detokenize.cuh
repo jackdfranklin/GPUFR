@@ -7,6 +7,8 @@
 #include <string>
 #include <stack>
 
+#define STRING_LEN 10 // 10 chars to write max unsigned in denary
+
 template<typename T>
 class stack
 {
@@ -40,11 +42,98 @@ class stack
     }
 };
 
+template<int size_val>
+class cu_string
+{
+    private:
+    char data[size_val];
 
-__device__ u32 detokenize(const std::vector<std::string> &tokens, const std::vector<std::string> &var_labels, u32 *vars, u32 prime);
+    public:
+    __global__ cu_string()
+    {
 
-__device__ u32 to_u32(std::string &token, u32 *vars, const std::vector<std::string> &var_labels);
+    }
+
+    __global__ inline char operator[](int index)
+    {
+        return data[index];
+    }
+
+    __global__ inline char operator[](int index) const
+    {
+        return data[index];
+    }
+
+    __global__ inline bool operator==(cu_string r_val)
+    {
+        for (int i=0; i<size_val, i++)
+        {
+            if (data[i] != r_val[i])
+                return false;
+        }
+
+        return true;
+    }
+
+    __global__ inline int size()
+    {
+        return size_val;
+    }
+
+    __global__ inline cu_string<size_val> substr(int start)
+    {
+        cu_string<size_val> result;
+        for (int i=0; i<size_val-start, i++)
+        {
+            result[i] = data[i+start];
+        }
+
+        return result;
+    }
+
+    __host__ inline void operator=(const std::string &r_val)
+    {
+        len = size_val < r_val.size()? size_val : r_val.size();
+        for (int i=0; i<len; i++)
+        {
+           data[i] = r_val[i];
+        }
+    }
+};
+
+template<int m, int n>
+__global__ inline bool operator==(const cu_string<m>& l_val, const char (&r_val)[n])
+{
+    len = l_val.size() < n? l_val.size() : n;
+    for (int i=0; i<len, i++)
+    {
+        if (l_val[i] != r_val[i])
+            return false;
+    }
+
+    return true;
+}
+
+template<int n>
+__global__ u32 strtou(const cu_string<n>& in)
+{
+    u32 result = 0;
+    u32 base = 1;
+    for (int i=0; i<n; i++)
+    {
+        result += base*(in[n-i] - '0');
+        base *= 10;
+    }
+
+    return result;
+} 
+
+__device__ u32 detokenize(const cu_string<STRING_LEN>* tokens, const cu_string<STRING_LEN>* var_labels, int exp_len, int n_vars, u32 *vars, u32 prime);
+
+__device__ u32 to_u32(cu_string<STRING_LEN> &token, u32 *vars, const cu_string<STRING_LEN>* var_labels, int n_vars);
 
 __device__ bool is_operator(const std::string &token);
 
-__device__ u32 operator_to_function(const std::string &op, u32 L, u32 R, u32 prime);
+__device__ u32 operator_to_function(const cu_string<STRING_LEN> &op, u32 L, u32 R, u32 prime);
+
+__host__ cu_string<STRING_LEN>* to_cu_string(const std::vector<std::string> &tokens);
