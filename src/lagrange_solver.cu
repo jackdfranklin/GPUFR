@@ -636,7 +636,7 @@ void interpolate_dense(const std::vector<std::string> &tokens, const std::vector
 
     int n_vars = var_labels.size();
 
-    int n_samps = pow(2, two_exponent) + 1;
+    int n_samps = (2<<two_exponent) + 1;
     int probe_len = pow(n_samps, n_vars);
     int initial_pol_size = 4;
     int lagrange_size = n_vars*(n_samps-1)*n_samps*initial_pol_size;
@@ -682,11 +682,18 @@ void interpolate_dense(const std::vector<std::string> &tokens, const std::vector
     // Computre all probes
     cu_string<STRING_LEN>* cu_tokens = to_cu_string(tokens);
     cu_string<STRING_LEN>* cu_var_labels = to_cu_string(var_labels);
-    cu_string<STRING_LEN>* d_cu_tokens, d_cu_var_labels;
-    CUDA_SAFE_CALL(cudaMalloc(&d_cu_tokens, tokens.size()*sizeof(cu_string<STRING_LEN>)));
-    CUDA_SAFE_CALL(cudaMalloc(&d_cu_var_labels, var_labels.size()*sizeof(cu_string<STRING_LEN>)));
+    cu_string<STRING_LEN> *d_cu_tokens, *d_cu_var_labels;
 
-    compute_probes_tokens<<<blocksPerGrid, threadsPerBlock>>>(tokens, var_labels, d_xs, d_probes, d_probes_2, n_vars, n_samps, prime, required_threads);
+    size_t bytes_tokens = tokens.size()*sizeof(cu_string<STRING_LEN>);
+    size_t bytes_var_labels = var_labels.size()*sizeof(cu_string<STRING_LEN>);
+
+    CUDA_SAFE_CALL(cudaMalloc(&d_cu_tokens, bytes_tokens));
+    CUDA_SAFE_CALL(cudaMalloc(&d_cu_var_labels, bytes_var_labels));
+
+    CUDA_SAFE_CALL(cudaMemcpy(d_cu_tokens, cu_tokens, bytes_tokens, cudaMemcpyHostToDevice));
+    CUDA_SAFE_CALL(cudaMemcpy(d_xs, xs, bytes_var_labels, cudaMemcpyHostToDevice));
+
+    compute_probes_tokens<<<blocksPerGrid, threadsPerBlock>>>(d_cu_tokens, d_cu_var_labels, tokens.size(), d_xs, d_probes, d_probes_2, n_vars, n_samps, prime, required_threads);
 
     required_threads = lagrange_size/initial_pol_size;
     threadsPerBlock = required_threads>256? 256 : required_threads;
@@ -752,8 +759,8 @@ void interpolate_dense(const std::vector<std::string> &tokens, const std::vector
         probe_vec[i] = results[i];
     }
 
-    std::vector<std::string> vars = {"x", "y", "z"};
-    std::string poly = nd_poly_to_string_flat(probe_vec, vars, n_samps, prime);
+    // std::vector<std::string> vars = {"x", "y", "z"};
+    std::string poly = nd_poly_to_string_flat(probe_vec, var_labels, n_samps, prime);
     std::cout << std::endl << poly << std::endl;
 
     // Free memory on the device
@@ -763,8 +770,11 @@ void interpolate_dense(const std::vector<std::string> &tokens, const std::vector
     CUDA_SAFE_CALL(cudaFree(d_probes_2));
     CUDA_SAFE_CALL(cudaFree(d_lagrange));
     CUDA_SAFE_CALL(cudaFree(d_lagrange_tmp));
+    CUDA_SAFE_CALL(cudaFree(d_cu_tokens));
+    CUDA_SAFE_CALL(cudaFree(d_cu_var_labels));
 
     delete[] lagrange_polynomials;
+    delete[] cu_var_labels;
     delete[] cu_tokens;
     delete[] probes;
     delete[] xs;

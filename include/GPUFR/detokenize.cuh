@@ -49,24 +49,24 @@ class cu_string
     char data[size_val];
 
     public:
-    __global__ cu_string()
+    __host__ __device__ cu_string()
     {
 
     }
 
-    __global__ inline char operator[](int index)
+    __host__ __device__ inline char& operator[](int index)
     {
         return data[index];
     }
 
-    __global__ inline char operator[](int index) const
+    __host__ __device__ inline char operator[](int index) const
     {
         return data[index];
     }
 
-    __global__ inline bool operator==(cu_string r_val)
+    __host__ __device__ inline bool operator==(cu_string r_val)
     {
-        for (int i=0; i<size_val, i++)
+        for (int i=0; i<size_val; i++)
         {
             if (data[i] != r_val[i])
                 return false;
@@ -75,15 +75,15 @@ class cu_string
         return true;
     }
 
-    __global__ inline int size()
+    __host__ __device__ inline int size()
     {
         return size_val;
     }
 
-    __global__ inline cu_string<size_val> substr(int start)
+    __host__ __device__ inline cu_string<size_val> substr(int start)
     {
         cu_string<size_val> result;
-        for (int i=0; i<size_val-start, i++)
+        for (int i=0; i<size_val-start; i++)
         {
             result[i] = data[i+start];
         }
@@ -91,21 +91,27 @@ class cu_string
         return result;
     }
 
+    __host__ __device__ inline char* c_str()
+    {
+        return data;
+    }
+
     __host__ inline void operator=(const std::string &r_val)
     {
-        len = size_val < r_val.size()? size_val : r_val.size();
+        int len = size_val < r_val.size()? size_val : r_val.size();
         for (int i=0; i<len; i++)
         {
            data[i] = r_val[i];
         }
+        data[size_val - 1] = '\0';
     }
 };
 
 template<int m, int n>
-__global__ inline bool operator==(const cu_string<m>& l_val, const char (&r_val)[n])
+__host__ __device__ inline bool operator==(const cu_string<m>& l_val, const char (&r_val)[n])
 {
-    len = l_val.size() < n? l_val.size() : n;
-    for (int i=0; i<len, i++)
+    int len = m < n? m : n;
+    for (int i=0; i<len; i++)
     {
         if (l_val[i] != r_val[i])
             return false;
@@ -115,7 +121,7 @@ __global__ inline bool operator==(const cu_string<m>& l_val, const char (&r_val)
 }
 
 template<int n>
-__global__ u32 strtou(const cu_string<n>& in)
+__device__ u32 strtou(const cu_string<n>& in)
 {
     u32 result = 0;
     u32 base = 1;
@@ -132,7 +138,7 @@ __device__ u32 detokenize(const cu_string<STRING_LEN>* tokens, const cu_string<S
 
 __device__ u32 to_u32(cu_string<STRING_LEN> &token, u32 *vars, const cu_string<STRING_LEN>* var_labels, int n_vars);
 
-__device__ bool is_operator(const std::string &token);
+__device__ bool is_operator(const cu_string<STRING_LEN> &token);
 
 __device__ u32 operator_to_function(const cu_string<STRING_LEN> &op, u32 L, u32 R, u32 prime);
 

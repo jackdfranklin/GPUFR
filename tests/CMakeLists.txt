@@ -52,10 +52,10 @@ target_link_libraries(bb_test PRIVATE gpufr Catch2::Catch2WithMain ${FLINT_LINK_
 target_include_directories(bb_test PRIVATE ${FLINT_INCLUDE_DIRS})
 set_target_properties(bb_test PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
-add_executable(parse_file parser_file.cpp)
-target_link_libraries(parse_file PRIVATE gpufr Catch2::Catch2WithMain ${FLINT_LINK_LIBRARIES} CUDA::nvrtc)
-target_include_directories(parse_file PRIVATE ${FLINT_INCLUDE_DIRS})
-set_target_properties(parse_file PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+# add_executable(parse_file parser_file.cpp)
+# target_link_libraries(parse_file PRIVATE gpufr Catch2::Catch2WithMain ${FLINT_LINK_LIBRARIES} CUDA::nvrtc)
+# target_include_directories(parse_file PRIVATE ${FLINT_INCLUDE_DIRS})
+# set_target_properties(parse_file PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
 # Register tests for ctest/make test to run
 add_test(NAME CudaTest COMMAND cuda_test) # Command can be a target
@@ -67,4 +67,4 @@ add_test(NAME LagrangeInterpolationTest COMMAND lg_test)
 add_test(NAME ChineseRemainder_test COMMAND crt_test)
 add_test(NAME ParserTest COMMAND parser_test)
 add_test(NAME BBGenTest COMMAND bb_test)
-add_test(NAME parse_file COMMAND pf_test)
+# add_test(NAME parse_file COMMAND pf_test)

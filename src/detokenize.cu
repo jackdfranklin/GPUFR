@@ -64,18 +64,23 @@ __device__ u32 operator_to_function(const cu_string<STRING_LEN> &op, u32 L, u32 
 
 		if(op == "+"){ 
 			result = ff_add(L, R, prime);
+			printf("+\n");
 		} else
 		if(op == "-"){ 
 			result = ff_subtract(L, R, prime);
+			printf("-\n");
 		} else
 		if(op == "*"){ 
 			result = ff_multiply(L, R, prime);
+			printf("*\n");
 		} else
 		if(op == "/"){ 
 			result = ff_divide(L, R, prime);
+			printf("/\n");
 		} else
 		if(op == "^"){ 
 			result = ff_pow(L, R, prime);
+			printf("^\n");
 		}
 
 	return result;
