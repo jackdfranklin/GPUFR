@@ -22,13 +22,13 @@ class stack
 	__device__ stack()
     {
         // ptr_bottom = &data;
-        ptr_top = ptr_bottom;
+        ptr_top = ptr_bottom-1;
     }
 
     __device__ void push(T val)
     {
-        *ptr_top = val;
         ptr_top += 1;
+        *ptr_top = val;
     }
 
     __device__ void  pop()
@@ -54,6 +54,27 @@ class cu_string
 
     }
 
+    __host__ cu_string(const std::string &r_val)
+    {
+        int len = size_val < r_val.size()? size_val : r_val.size();
+        for (int i=0; i<len; i++)
+        {
+            data[i] = r_val[i];
+        }
+        data[len] = '\0';
+    }
+
+    template<int r_size>
+    __host__ cu_string(const char (&r_val)[r_size])
+    {
+        int len = size_val < r_size? size_val : r_size;
+        for (int i=0; i<len; i++)
+        {
+            data[i] = r_val[i];
+        }
+        data[len] = '\0';
+    }
+
     __host__ __device__ inline char& operator[](int index)
     {
         return data[index];
@@ -70,9 +91,9 @@ class cu_string
         {
             if (data[i] != r_val[i])
                 return false;
+            if (data[i] == '\0')
+                return true;
         }
-
-        return true;
     }
 
     __host__ __device__ inline int size()
@@ -91,7 +112,7 @@ class cu_string
         return result;
     }
 
-    __host__ __device__ inline char* c_str()
+    __host__ __device__ inline const char* c_str() const
     {
         return data;
     }
@@ -103,7 +124,7 @@ class cu_string
         {
            data[i] = r_val[i];
         }
-        data[size_val - 1] = '\0';
+        data[len] = '\0';
     }
 };
 
@@ -121,17 +142,18 @@ __host__ __device__ inline bool operator==(const cu_string<m>& l_val, const char
 }
 
 template<int n>
-__device__ u32 strtou(const cu_string<n>& in)
+__host__ __device__ u32 strtou(const cu_string<n>& in)
 {
     u32 result = 0;
-    u32 base = 1;
     for (int i=0; i<n; i++)
     {
-        result += base*(in[n-i] - '0');
-        base *= 10;
+        if (in[i] == '\0')
+        {
+            return result;
+        }
+        result *= 10;
+        result += (in[i] - '0');
     }
-
-    return result;
 } 
 
 __device__ u32 detokenize(const cu_string<STRING_LEN>* tokens, const cu_string<STRING_LEN>* var_labels, int exp_len, int n_vars, u32 *vars, u32 prime);

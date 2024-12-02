@@ -4,23 +4,17 @@ project(GPUFR VERSION 0.1
 			  DESCRIPTION "Black box function reconstruction on GPUs"
 			  LANGUAGES CXX CUDA)
 
-set(CMAKE_CUDA_FLAGS_DEBUG "-G -g")
+set(CMAKE_CUDA_FLAGS_DEBUG "-g -O0")
+set(CMAKE_CXX_FLAGS_DEBUG " -g -O0")
 
 # Release flags (add optimizations)
-set(CMAKE_CXX_FLAGS_RELEASE " -g3 -G")
-set(CMAKE_CUDA_FLAGS_RELEASE " -g3 -G")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+set(CMAKE_CUDA_FLAGS_RELEASE "-O3")
 find_package(CUDAToolkit REQUIRED)
 
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
-
-		if (CMAKE_BUILD_TYPE STREQUAL "Debug")
-			include(CTest)
-
-			add_subdirectory(tests)
-		else()
-			add_subdirectory(examples)
-			add_subdirectory(tests)
-		endif()
+	add_subdirectory(examples)
+	add_subdirectory(tests)
 endif()
 
 if(NOT DEFINED CMAKE_CUDA_STANDARD)

@@ -37,15 +37,14 @@ __device__ u32 to_u32(cu_string<STRING_LEN> &token, u32 *vars, const cu_string<S
     int count = 0;
     for (int i=0; i<n_vars; i++)
     {
-		cu_string<STRING_LEN> v = var_labels[i];
+		cu_string v = var_labels[i];
+
         if (token == v)
         {
-            int index = strtou(token.substr(1));
             return vars[count];
         }
         count += 1;
     }
-    
     return strtou(token);
 }
 
@@ -64,23 +63,18 @@ __device__ u32 operator_to_function(const cu_string<STRING_LEN> &op, u32 L, u32 
 
 		if(op == "+"){ 
 			result = ff_add(L, R, prime);
-			printf("+\n");
 		} else
 		if(op == "-"){ 
 			result = ff_subtract(L, R, prime);
-			printf("-\n");
 		} else
 		if(op == "*"){ 
 			result = ff_multiply(L, R, prime);
-			printf("*\n");
 		} else
 		if(op == "/"){ 
 			result = ff_divide(L, R, prime);
-			printf("/\n");
 		} else
 		if(op == "^"){ 
 			result = ff_pow(L, R, prime);
-			printf("^\n");
 		}
 
 	return result;

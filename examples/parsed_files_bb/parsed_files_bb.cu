@@ -109,30 +109,19 @@ int main(int argc, char* argv[])
     std::string fileContents = buffer.str();  // Convert buffer to a string
 
     std::vector<std::string> tokens = parse_expression(fileContents);
-    std::vector<std::string> var_lables = {"s", "t"};
+    std::vector<std::string> var_lables = {"s"};
 
     cu_string<STRING_LEN>* cu_tokens = to_cu_string(tokens);
 
-    for (int i=0; i<tokens.size(); i++)
-    {
-        printf("cu: %s \n", cu_tokens[i].c_str());
-    }
-
     delete[] cu_tokens;
 
-    for (auto t : tokens)
-    {
-        printf("%s \n", t.c_str());
-    }
-
-    int n_vars = 2;
-    int two_exp = 1;
+    int n_vars = 1;
+    int two_exp = 2;
     int n_samps = (1<<two_exp) + 1;
     int result_size = pow(n_samps, n_vars);
     u32* results = new u32[result_size];
 
     interpolate_dense(tokens, var_lables, two_exp, ntt_primes, results);
-    std::cout << "hello sweety" << std::endl;
 
     delete[] results;
 }
