@@ -109,13 +109,9 @@ int main(int argc, char* argv[])
     std::string fileContents = buffer.str();  // Convert buffer to a string
 
     std::vector<std::string> tokens = parse_expression(fileContents);
-    std::vector<std::string> var_lables = {"s"};
+    std::vector<std::string> var_lables = {"s", "t"};
 
-    cu_string<STRING_LEN>* cu_tokens = to_cu_string(tokens);
-
-    delete[] cu_tokens;
-
-    int n_vars = 1;
+    int n_vars = var_lables.size();
     int two_exp = 2;
     int n_samps = (1<<two_exp) + 1;
     int result_size = pow(n_samps, n_vars);
