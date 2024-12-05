@@ -23,37 +23,27 @@ __host__ __device__ void print_vec(const u32* vec, int size, u32 prime)
     // printf("\n");
 }
 
-__device__ u32 fun(u32 *vars, u32 prime)
-{
-    u32 result;
-    u32 x = *vars;
-    // u32 y = *(vars + 1);
-    // result = ff_pow(x, 2, prime) + 2;
-    for (int i=0; i<(1<<12); i++)
-        {
-            result = ff_add(result, ff_multiply(i, ff_pow(x, i, prime), prime), prime);
+std::string nd_poly_to_string_flat(const std::vector<double>& coef_flat, const std::vector<std::string>& variables, int n_samps, u32 prime) {
+    // From chat GPT
+    int dim = variables.size();
+    std::ostringstream result;
+    for (size_t i = 0; i < coef_flat.size(); ++i) {
+        double c = coef_flat[i];
+        if (sqrt(pow(c, 2)) >= 1) {
+            c = c > prime/2.0 ? c-prime : c;
+            result << (c > 0 && result.tellp() > 0 ? "+ " : "") << std::fixed << std::setprecision(0) << c;
+            for (int j = 0; j < dim; ++j) {
+                int power = static_cast<int>(std::floor(i / std::pow(n_samps, j))) % n_samps;
+                if (power > 0) {
+                    result << "*" << variables[j] << "^" << power;
+                }
+            }
+            result << " ";
         }
-    return result;
-}
-
-__global__ void compute_probes(const u32 *xs, u32 *probes, u32 *probes_2, int n_vars, int n_samps, u32 prime, int required_threads) {
-    int i = blockDim.x * blockIdx.x + threadIdx.x;
-
-    if (i < required_threads)
-    {
-        u32 test_params[MAX_VARS];
-
-        for (int j=0; j<n_vars; j++)
-        {
-            float ifloat = i;
-            int dimension_index = static_cast<int>(floorf(ifloat/pow(n_samps, j))) % n_samps;//floorf((pow(n_samps, j)));
-            test_params[j] = xs[j*n_samps+dimension_index];
-        }
-            
-        probes[i] = fun(test_params, prime);
-        probes_2[i] = 0;
     }
+    return result.str();
 }
+
 
 __global__ void compute_probes_tokens(u32* stack_allocation, const cu_string<STRING_LEN>* tokens, const cu_string<STRING_LEN>* var_labels, int token_len, const u32 *xs, u32 *probes, u32 *probes_2, size_t max_stack, int n_vars, int n_samps, u32 prime, int required_threads) {
     int i = blockDim.x * blockIdx.x + threadIdx.x;
@@ -74,20 +64,6 @@ __global__ void compute_probes_tokens(u32* stack_allocation, const cu_string<STR
     }
 }
 
-__device__ void atomic_add(u32 *l_val, u32 r_val, u32 prime)
-{
-    u32 assumed, old;
-    u32 value;
-
-    old = (*l_val);
-    do
-    {
-        value = *l_val;
-        assumed = old;
-        old = atomicCAS(&((*l_val)), assumed, ff_add(value, r_val, prime));
-    } while (assumed != old);
-}
-
 __device__ u32 compute_denom_nd(int current_index, const u32 *xs, int dim, int n_vars, int n_samps, int idx, u32 prime)
 {
     int flat_current_index = dim*n_samps + (idx/static_cast<int>(pow(n_samps, dim)))%n_samps;
@@ -105,27 +81,6 @@ __device__ u32 compute_denom_nd(int current_index, const u32 *xs, int dim, int n
     }
 
     return denom;
-}
-
-std::string nd_poly_to_string_flat(const std::vector<double>& coef_flat, const std::vector<std::string>& variables, int n_samps, u32 prime) {
-    // From chat GPT
-    int dim = variables.size();
-    std::ostringstream result;
-    for (size_t i = 0; i < coef_flat.size(); ++i) {
-        double c = coef_flat[i];
-        if (sqrt(pow(c, 2)) >= 1) {
-            c = c > prime/2.0 ? c-prime : c;
-            result << (c > 0 && result.tellp() > 0 ? "+ " : "") << std::fixed << std::setprecision(0) << c;
-            for (int j = 0; j < dim; ++j) {
-                int power = static_cast<int>(std::floor(i / std::pow(n_samps, j))) % n_samps;
-                if (power > 0) {
-                    result << "*" << variables[j] << "^" << power;
-                }
-            }
-            result << " ";
-        }
-    }
-    return result.str();
 }
 
 __global__ void init_lagrange_branch_a(const u32* xs, u32* lagrange, u32* denom_tmp, int n_samps, int n_vars, u32 prime, int required_threads)
@@ -482,146 +437,6 @@ void reduce_lagrange_nd(u32* lagrange, u32* lagrange_tmp, u32* denoms, u32* prob
     reduce_sum_kernel<<<blocksPerGrid, threadsPerBlock>>>(lagrange_tmp, probes, probes_tmp, n_samps, n_vars, dim, probe_step, probe_step_large, iterations, prime, required_threads);
 }
 
-
-// TDOD: either switch to Karatsuba algorithm or FFT use Barett algorithm for division
-void multi_interp(int n_vars, int two_exponent, const std::string &ntt_primes)
-{
-    int deviceCount = 0;
-    CUDA_SAFE_CALL(cudaGetDeviceCount(&deviceCount));
-
-    cudaDeviceProp deviceProp;
-    cudaGetDeviceProperties(&deviceProp, 0);
-    if (deviceProp.concurrentKernels == 0) {
-        std::cerr << "GPU does not support concurrent kernel execution!" << std::endl;
-    }
-
-    int n_samps = pow(2, two_exponent) + 1;
-    int probe_len = pow(n_samps, n_vars);
-    int initial_pol_size = 4;
-    int lagrange_size = n_vars*(n_samps-1)*n_samps*initial_pol_size;
-    
-    u32* lagrange_polynomials = new u32[lagrange_size];
-    u32* probes = new u32[probe_len];
-    u32* xs = new u32[n_vars*n_samps];
-    std::srand(time(0));
-
-    std::vector<u32> ws = get_w(ntt_primes, 0);
-    u32 prime = ws[0];
-
-    for (int i=0; i<n_vars; i++)
-    {
-        for (int j=0; j<n_samps; j++)
-        {
-            int flat_index = i*n_samps + j;
-            xs[flat_index] = (std::rand())%prime;
-        }
-    }
-
-    u32 *d_xs, *d_denoms, *d_probes, *d_probes_2, *d_lagrange, *d_lagrange_tmp;
-
-    // Size in bytes for each vector
-    size_t bytes_xs = n_vars*n_samps * sizeof(u32);
-    size_t bytes_denoms = n_vars*n_samps * sizeof(u32);
-    size_t bytes_probes = probe_len * sizeof(u32);
-    size_t bytes_lagrange = lagrange_size * sizeof(u32);
-
-    // Allocate memory on the device
-    CUDA_SAFE_CALL(cudaMalloc(&d_xs, bytes_xs));
-    CUDA_SAFE_CALL(cudaMalloc(&d_denoms, bytes_denoms));
-    CUDA_SAFE_CALL(cudaMalloc(&d_probes, bytes_probes));
-    CUDA_SAFE_CALL(cudaMalloc(&d_probes_2, bytes_probes));
-    CUDA_SAFE_CALL(cudaMalloc(&d_lagrange, bytes_lagrange));
-    CUDA_SAFE_CALL(cudaMalloc(&d_lagrange_tmp, bytes_lagrange));
-    CUDA_SAFE_CALL(cudaMemcpy(d_xs, xs, bytes_xs, cudaMemcpyHostToDevice));
-
-    int required_threads = probe_len;
-    int threadsPerBlock = required_threads>256? 256 : required_threads;
-    int blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
-
-    // Computre all probes
-    compute_probes<<<blocksPerGrid, threadsPerBlock>>>(d_xs, d_probes, d_probes_2, n_vars, n_samps, prime, required_threads);
-
-    required_threads = lagrange_size/initial_pol_size;
-    threadsPerBlock = required_threads>256? 256 : required_threads;
-    blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
-
-    // Dispatch together TODO
-    cudaStream_t stream1, stream2;
-    cudaStreamCreate(&stream1);
-    cudaStreamCreate(&stream2);
-    init_lagrange_branch_a<<<blocksPerGrid, threadsPerBlock, 0, stream1>>>(d_xs, d_lagrange, d_lagrange_tmp, n_samps, n_vars, prime, required_threads);
-    init_lagrange_branch_b<<<blocksPerGrid, threadsPerBlock, 0, stream2>>>(d_xs, d_lagrange, d_lagrange_tmp, n_samps, n_vars, prime, required_threads);
-    cudaStreamSynchronize(stream1);
-    cudaStreamSynchronize(stream2);
-
-    reduce_denoms(d_denoms, d_lagrange_tmp, n_samps, n_vars, prime);
-
-    for (int i=0; i<two_exponent; i++)
-    {
-        required_threads = lagrange_size/2;
-        threadsPerBlock = required_threads>256? 256 : required_threads;
-        blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
-
-        int pol_size = 1<<(i+2);
-
-        do_bulk_ntt(d_lagrange, d_lagrange_tmp, n_samps, n_vars, i, ws, prime); // doesnt account for higher dimensions
-        element_multiply<<<blocksPerGrid, threadsPerBlock>>>(d_lagrange_tmp, pol_size, prime, required_threads);
-        do_bulk_ntt(d_lagrange_tmp, d_lagrange, n_samps, n_vars, i, ws, prime, true);
-    }
-
-    int pol_size = n_samps;
-    int pol_container_size = (1<<(two_exponent+2));
-    required_threads = pol_size*n_samps*n_vars;
-    threadsPerBlock = required_threads>256? 256 : required_threads;
-    blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
-
-    compactify<<<blocksPerGrid, threadsPerBlock>>>(d_lagrange, d_lagrange_tmp, pol_size, pol_container_size, required_threads); // Inefficient but not that bad
-    std::swap(d_lagrange, d_lagrange_tmp);
-
-    // Perform multidimensional interpolation
-    required_threads = probe_len;
-    threadsPerBlock = required_threads>256? 256 : required_threads;
-    blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
-    for (int i=0; i<n_vars; i++)
-    {
-        int lagrange_sub_start = n_samps*n_samps*i;
-        int denoms_sub_start = n_samps*i;
-
-        u32 *d_lagrange_sub = d_lagrange+lagrange_sub_start;
-        u32 *d_lagrange_tmp_sub = d_lagrange+lagrange_sub_start;
-        u32 *d_denoms_sub = d_denoms+denoms_sub_start;
-
-        reduce_lagrange_nd(d_lagrange_sub, d_lagrange_tmp_sub, d_denoms_sub, d_probes, d_probes_2, n_samps, n_vars, i, prime);
-        
-        std::swap(d_probes, d_probes_2);
-    }
-
-    CUDA_SAFE_CALL(cudaDeviceSynchronize());
-    CUDA_SAFE_CALL(cudaMemcpy(probes, d_probes, bytes_probes, cudaMemcpyDeviceToHost));
-
-    std::vector<double> probe_vec(probe_len);
-    for (int i=0; i<probe_len; i++)
-    {
-        probe_vec[i] = probes[i];
-    }
-
-    std::vector<std::string> vars = {"x", "y", "z"};
-    std::string poly = nd_poly_to_string_flat(probe_vec, vars, n_samps, prime);
-    std::cout << std::endl << poly << std::endl;
-
-    // Free memory on the device
-    CUDA_SAFE_CALL(cudaFree(d_xs));
-    CUDA_SAFE_CALL(cudaFree(d_denoms));
-    CUDA_SAFE_CALL(cudaFree(d_probes));
-    CUDA_SAFE_CALL(cudaFree(d_probes_2));
-    CUDA_SAFE_CALL(cudaFree(d_lagrange));
-    CUDA_SAFE_CALL(cudaFree(d_lagrange_tmp));
-
-    delete[] lagrange_polynomials;
-    delete[] probes;
-    delete[] xs;
-}
-
 // TDOD: either switch to Karatsuba algorithm or FFT use Barett algorithm for division
 void interpolate_dense(const std::vector<std::string> &tokens, const std::vector<std::string> &var_labels, int two_exponent, const std::string &ntt_primes, u32* results)
 {
@@ -701,6 +516,8 @@ void interpolate_dense(const std::vector<std::string> &tokens, const std::vector
 
     compute_probes_tokens<<<blocksPerGrid, threadsPerBlock>>>(d_stack_allocation, d_cu_tokens, d_cu_var_labels, tokens.size(), d_xs, d_probes, d_probes_2, stack_depth, n_vars, n_samps, prime, required_threads);
 
+    CUDA_SAFE_CALL(cudaFree(d_stack_allocation));
+
     required_threads = lagrange_size/initial_pol_size;
     threadsPerBlock = required_threads>256? 256 : required_threads;
     blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
@@ -777,7 +594,6 @@ void interpolate_dense(const std::vector<std::string> &tokens, const std::vector
     CUDA_SAFE_CALL(cudaFree(d_lagrange_tmp));
     CUDA_SAFE_CALL(cudaFree(d_cu_tokens));
     CUDA_SAFE_CALL(cudaFree(d_cu_var_labels));
-    CUDA_SAFE_CALL(cudaFree(d_stack_allocation));
 
     delete[] lagrange_polynomials;
     delete[] cu_var_labels;

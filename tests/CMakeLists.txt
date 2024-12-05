@@ -27,10 +27,10 @@ target_link_libraries(ui_test PRIVATE gpufr Catch2::Catch2WithMain ${FLINT_LINK_
 target_include_directories(ui_test PRIVATE ${FLINT_INCLUDE_DIRS})
 set_target_properties(ui_test PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
-add_executable(lg_test lagrange_test.cu)
-target_link_libraries(lg_test PRIVATE gpufr Catch2::Catch2WithMain ${FLINT_LINK_LIBRARIES})
-target_include_directories(lg_test PRIVATE ${FLINT_INCLUDE_DIRS})
-set_target_properties(lg_test PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+#add_executable(lg_test lagrange_test.cu)
+#target_link_libraries(lg_test PRIVATE gpufr Catch2::Catch2WithMain ${FLINT_LINK_LIBRARIES})
+#target_include_directories(lg_test PRIVATE ${FLINT_INCLUDE_DIRS})
+#set_target_properties(lg_test PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
 add_executable(ntt_test ntt_test.cu)
 target_link_libraries(ntt_test PRIVATE gpufr Catch2::Catch2WithMain ${FLINT_LINK_LIBRARIES})
@@ -68,7 +68,7 @@ add_test(NAME Ntt_test COMMAND ntt_test) # Command can be a target
 add_test(NAME FiniteFieldTest COMMAND ff_test) 
 add_test(NAME VandermondeSolverTest COMMAND vm_test)
 add_test(NAME UnivariateInterpolationTest COMMAND ui_test)
-add_test(NAME LagrangeInterpolationTest COMMAND lg_test)
+#add_test(NAME LagrangeInterpolationTest COMMAND lg_test)
 add_test(NAME ChineseRemainder_test COMMAND crt_test)
 add_test(NAME ParserTest COMMAND parser_test)
 add_test(NAME BBGenTest COMMAND bb_test)
