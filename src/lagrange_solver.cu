@@ -693,6 +693,8 @@ void interpolate_dense(const std::vector<std::string> &tokens, const std::vector
     CUDA_SAFE_CALL(cudaMemcpy(d_cu_tokens, cu_tokens, bytes_tokens, cudaMemcpyHostToDevice));
     CUDA_SAFE_CALL(cudaMemcpy(d_cu_var_labels, cu_var_labels, bytes_var_labels, cudaMemcpyHostToDevice));
 
+    int stack_depth = get_max_depth(tokens);
+
     compute_probes_tokens<<<blocksPerGrid, threadsPerBlock>>>(d_cu_tokens, d_cu_var_labels, tokens.size(), d_xs, d_probes, d_probes_2, n_vars, n_samps, prime, required_threads);
 
     required_threads = lagrange_size/initial_pol_size;

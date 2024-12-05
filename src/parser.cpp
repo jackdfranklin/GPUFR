@@ -225,3 +225,19 @@ std::string postfix_to_infix(const std::vector<std::string> &rpn){
 
 	return S.top();
 }
+
+int get_max_depth(std::vector<std::string> expression)
+{
+	int stack_depth = 0;
+	for (auto token : expression)
+	{
+		if (is_operator(token))
+		{
+			stack_depth -= 1;
+		} else {
+			stack_depth += 1;
+		}
+	}
+
+	return stack_depth;
+}

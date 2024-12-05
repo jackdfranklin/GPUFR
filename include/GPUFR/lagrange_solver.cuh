@@ -18,6 +18,7 @@
 #include "GPUFR/cuda_safe_call.cuh"
 #include "GPUFR/ntt.cuh"
 #include "GPUFR/detokenize.cuh"
+#include "GPUFR/parser.hpp"
 
 __device__ u32 fun(u32 *vars);
 
