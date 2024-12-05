@@ -229,6 +229,7 @@ std::string postfix_to_infix(const std::vector<std::string> &rpn){
 int get_max_depth(std::vector<std::string> expression)
 {
 	int stack_depth = 0;
+	int max_depth = 0;
 	for (auto token : expression)
 	{
 		if (is_operator(token))
@@ -237,7 +238,8 @@ int get_max_depth(std::vector<std::string> expression)
 		} else {
 			stack_depth += 1;
 		}
+		max_depth = max_depth > stack_depth? max_depth : stack_depth;
 	}
 
-	return stack_depth;
+	return max_depth;
 }

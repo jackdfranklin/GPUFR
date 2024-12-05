@@ -24,7 +24,7 @@ __device__ u32 fun(u32 *vars);
 
 __global__ void compute_probes(const u32 *xs, u32 *probes, u32 *probes_2, int n_vars, int n_samps);
 
-__global__ void compute_probes_tokens(const cu_string<STRING_LEN>* tokens, const cu_string<STRING_LEN>* var_labels, int token_len, const u32 *xs, u32 *probes, u32 *probes_2, int n_vars, int n_samps, u32 prime, int required_threads);
+__global__ void compute_probes_tokens(u32* stack_allocation, const cu_string<STRING_LEN>* tokens, const cu_string<STRING_LEN>* var_labels, int token_len, const u32 *xs, u32 *probes, u32 *probes_2, size_t max_stack, int n_vars, int n_samps, u32 prime, int required_threads);
 
 __device__ void atomic_add(u32 *l_val, u32 r_val);
 

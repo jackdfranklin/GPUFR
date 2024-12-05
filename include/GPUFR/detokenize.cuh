@@ -14,14 +14,14 @@ class stack
 {
     private:
     T* ptr_top;
-    // T* ptr_bottom;
-    T ptr_bottom[100];
+    T* ptr_bottom;
 
     public:
 
-	__device__ stack()
+	__device__ stack(u32* stack_allocation, int thread_id, int max_stack)
     {
         // ptr_bottom = &data;
+        ptr_bottom = stack_allocation + thread_id*max_stack;
         ptr_top = ptr_bottom-1;
     }
 
@@ -156,7 +156,7 @@ __host__ __device__ u32 strtou(const cu_string<n>& in)
     }
 } 
 
-__device__ u32 detokenize(const cu_string<STRING_LEN>* tokens, const cu_string<STRING_LEN>* var_labels, int exp_len, int n_vars, u32 *vars, u32 prime);
+__device__ u32 detokenize(u32* stack_allocation, const cu_string<STRING_LEN>* tokens, const cu_string<STRING_LEN>* var_labels, int max_stack, int thread_id, int token_len, int n_vars, u32 *vars, u32 prime);
 
 __device__ u32 to_u32(cu_string<STRING_LEN> &token, u32 *vars, const cu_string<STRING_LEN>* var_labels, int n_vars);
 

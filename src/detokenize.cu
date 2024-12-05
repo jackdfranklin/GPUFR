@@ -11,9 +11,9 @@
 
 // Compute all probes before allocating the memory for the reconstruction to avoid running out
 
-__device__ u32 detokenize(const cu_string<STRING_LEN>* tokens, const cu_string<STRING_LEN>* var_labels, int token_len, int n_vars, u32 *vars, u32 prime)
+__device__ u32 detokenize(u32* stack_allocation, const cu_string<STRING_LEN>* tokens, const cu_string<STRING_LEN>* var_labels, int max_stack, int thread_id, int token_len, int n_vars, u32 *vars, u32 prime)
 {
-	stack<u32> US;
+	stack<u32> US(stack_allocation, thread_id, max_stack);
 	for(int i=0; i<token_len; i++){
 		cu_string token = tokens[i];
 		if(!is_operator(token)){

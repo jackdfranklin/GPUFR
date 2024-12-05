@@ -55,7 +55,7 @@ __global__ void compute_probes(const u32 *xs, u32 *probes, u32 *probes_2, int n_
     }
 }
 
-__global__ void compute_probes_tokens(const cu_string<STRING_LEN>* tokens, const cu_string<STRING_LEN>* var_labels, int token_len, const u32 *xs, u32 *probes, u32 *probes_2, int n_vars, int n_samps, u32 prime, int required_threads) {
+__global__ void compute_probes_tokens(u32* stack_allocation, const cu_string<STRING_LEN>* tokens, const cu_string<STRING_LEN>* var_labels, int token_len, const u32 *xs, u32 *probes, u32 *probes_2, size_t max_stack, int n_vars, int n_samps, u32 prime, int required_threads) {
     int i = blockDim.x * blockIdx.x + threadIdx.x;
 
     if (i < required_threads)
@@ -69,7 +69,7 @@ __global__ void compute_probes_tokens(const cu_string<STRING_LEN>* tokens, const
             test_params[j] = xs[j*n_samps+dimension_index];
         }
             
-        probes[i] = detokenize(tokens, var_labels, token_len, n_vars, test_params, prime);
+        probes[i] = detokenize(stack_allocation, tokens, var_labels, max_stack, i, token_len, n_vars, test_params, prime);
         probes_2[i] = 0;
     }
 }
@@ -683,19 +683,23 @@ void interpolate_dense(const std::vector<std::string> &tokens, const std::vector
     cu_string<STRING_LEN>* cu_tokens = to_cu_string(tokens);
     cu_string<STRING_LEN>* cu_var_labels = to_cu_string(var_labels);
     cu_string<STRING_LEN> *d_cu_tokens, *d_cu_var_labels;
+    u32 *d_stack_allocation;
 
     size_t bytes_tokens = tokens.size()*sizeof(cu_string<STRING_LEN>);
     size_t bytes_var_labels = var_labels.size()*sizeof(cu_string<STRING_LEN>);
 
+    size_t stack_depth = get_max_depth(tokens);
+    size_t stack_allocation_size = stack_depth * required_threads;
+    size_t bytes_stack_allocation = stack_allocation_size*sizeof(u32);
+
     CUDA_SAFE_CALL(cudaMalloc(&d_cu_tokens, bytes_tokens));
     CUDA_SAFE_CALL(cudaMalloc(&d_cu_var_labels, bytes_var_labels));
+    CUDA_SAFE_CALL(cudaMalloc(&d_stack_allocation, bytes_stack_allocation));
 
     CUDA_SAFE_CALL(cudaMemcpy(d_cu_tokens, cu_tokens, bytes_tokens, cudaMemcpyHostToDevice));
     CUDA_SAFE_CALL(cudaMemcpy(d_cu_var_labels, cu_var_labels, bytes_var_labels, cudaMemcpyHostToDevice));
 
-    int stack_depth = get_max_depth(tokens);
-
-    compute_probes_tokens<<<blocksPerGrid, threadsPerBlock>>>(d_cu_tokens, d_cu_var_labels, tokens.size(), d_xs, d_probes, d_probes_2, n_vars, n_samps, prime, required_threads);
+    compute_probes_tokens<<<blocksPerGrid, threadsPerBlock>>>(d_stack_allocation, d_cu_tokens, d_cu_var_labels, tokens.size(), d_xs, d_probes, d_probes_2, stack_depth, n_vars, n_samps, prime, required_threads);
 
     required_threads = lagrange_size/initial_pol_size;
     threadsPerBlock = required_threads>256? 256 : required_threads;
