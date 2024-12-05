@@ -777,6 +777,7 @@ void interpolate_dense(const std::vector<std::string> &tokens, const std::vector
     CUDA_SAFE_CALL(cudaFree(d_lagrange_tmp));
     CUDA_SAFE_CALL(cudaFree(d_cu_tokens));
     CUDA_SAFE_CALL(cudaFree(d_cu_var_labels));
+    CUDA_SAFE_CALL(cudaFree(d_stack_allocation));
 
     delete[] lagrange_polynomials;
     delete[] cu_var_labels;
