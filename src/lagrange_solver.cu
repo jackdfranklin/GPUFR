@@ -19,8 +19,6 @@ __host__ __device__ void print_vec(const u32* vec, int size, u32 prime)
     {
         printf("%i, ", as_int(vec[i], prime));
     }
-    // printf("\n");
-    // printf("\n");
 }
 
 std::string nd_poly_to_string_flat(const std::vector<double>& coef_flat, const std::vector<std::string>& variables, int n_samps, u32 prime) {
@@ -45,7 +43,7 @@ std::string nd_poly_to_string_flat(const std::vector<double>& coef_flat, const s
 }
 
 
-__global__ void compute_probes_tokens(u32* stack_allocation, const cu_string<STRING_LEN>* tokens, const cu_string<STRING_LEN>* var_labels, int token_len, const u32 *xs, u32 *probes, u32 *probes_2, size_t max_stack, int n_vars, int n_samps, u32 prime, int required_threads) {
+__global__ void compute_probes_tokens(u32* stack_allocation, const cu_type::string<STRING_LEN>* tokens, const cu_type::string<STRING_LEN>* var_labels, int token_len, const u32 *xs, u32 *probes, u32 *probes_2, size_t max_stack, int n_vars, int n_samps, u32 prime, int required_threads) {
     int i = blockDim.x * blockIdx.x + threadIdx.x;
 
     if (i < required_threads)
@@ -62,25 +60,6 @@ __global__ void compute_probes_tokens(u32* stack_allocation, const cu_string<STR
         probes[i] = detokenize(stack_allocation, tokens, var_labels, max_stack, i, token_len, n_vars, test_params, prime);
         probes_2[i] = 0;
     }
-}
-
-__device__ u32 compute_denom_nd(int current_index, const u32 *xs, int dim, int n_vars, int n_samps, int idx, u32 prime)
-{
-    int flat_current_index = dim*n_samps + (idx/static_cast<int>(pow(n_samps, dim)))%n_samps;
-
-    u32 denom;
-    denom = 1;
-
-    for (int i=0; i<n_samps; i++)
-    {
-        int flat_index = dim*n_samps + i;
-        if (flat_index != flat_current_index) // Bad warp divergence ~3x slowdown
-        {
-            denom = ff_multiply(denom, (ff_subtract(xs[flat_current_index],  xs[flat_index], prime)), prime);
-        }
-    }
-
-    return denom;
 }
 
 __global__ void init_lagrange_branch_a(const u32* xs, u32* lagrange, u32* denom_tmp, int n_samps, int n_vars, u32 prime, int required_threads)
@@ -218,18 +197,6 @@ void reduce_denoms(u32* denoms, u32* denoms_tmp, int n_samps, int n_vars, int pr
     copy_denoms<<<blocksPerGrid, threadsPerBlock>>>(denoms, denoms_tmp, stride, required_threads);
 }
 
-__global__ void compute_sub_pols(u32* lagrange, u32* lagrange_tmp, u32* denom, u32* probes, int probe_stride, int n_samps, u32 prime, int required_threads)
-{
-    int idx = threadIdx.x + blockIdx.x * blockDim.x;
-
-    if (idx < required_threads)
-    {
-        int probe_index = idx/(n_samps);
-
-        lagrange_tmp[idx] = ff_multiply(probes[probe_index*probe_stride], ff_divide(lagrange[idx], denom[probe_index], prime), prime);
-    }
-}
-
 __global__ void compute_sub_pols_nd(u32* lagrange, u32* lagrange_tmp, u32* denom, int n_samps, u32 prime, int required_threads)
 {
     int idx = threadIdx.x + blockIdx.x * blockDim.x;
@@ -241,43 +208,6 @@ __global__ void compute_sub_pols_nd(u32* lagrange, u32* lagrange_tmp, u32* denom
         lagrange_tmp[idx] = ff_divide(lagrange[idx], denom[probe_index], prime);
     }
 }
-
-__global__ void reduce_lagrange_level(u32* lagrange, int n_samps, int n_vars, int level, u32 prime, int required_threads)
-{
-    int idx = threadIdx.x + blockIdx.x * blockDim.x;
-
-    if (idx < required_threads)
-    {
-        // int sub_step = 1<<(level)*n_samps;
-        int stride = (level+1)*n_samps;
-        int start_index = idx%n_samps + (idx/n_samps)*(2*stride);
-
-        // int over_stride = (level+1)*n_samps;
-
-        u32 in_1 = lagrange[start_index];
-        u32 in_2 = lagrange[start_index+stride];
-
-        printf("level: %i in1: %i in2: %i start_index: %i, start_index+sub_step: %i \n", level, in_1, in_2, start_index, start_index+stride);
-
-        lagrange[start_index] = ff_add(in_1, in_2, prime);
-    }
-}
-
-__global__ void reduce_lagrange_final(u32* lagrange, u32* probes, int probe_stride, int n_samps, u32 prime, int required_threads)
-{
-    int idx = threadIdx.x + blockIdx.x * blockDim.x;
-
-    if (idx < required_threads)
-    {
-        int sub_step = n_samps;
-
-        u32 in_1 = lagrange[idx];
-        u32 in_2 = lagrange[idx+sub_step];
-
-        probes[idx*probe_stride] = ff_add(in_1, in_2, prime);
-    }
-}
-
 
 __device__ int get_probe_read_index(int warp_id, int lane_id, int probe_step, int probe_step_large, int start_offset)
 {
@@ -380,36 +310,6 @@ __global__ void reduce_sum_kernel(u32 *lagrange, u32* probes, u32 *output_probes
     }
 }
 
-// Fills in a row in the new probe matrix by reducing the sum of lagrange polynomials to a single polynomial
-void reduce_lagrange(u32* lagrange, u32* lagrange_tmp, u32* denoms, u32* probes, int probe_stride, int n_samps, int n_vars, u32 prime)
-{
-    int iterations = log2(n_samps-1);
-
-    int required_threads, threadsPerBlock, blocksPerGrid;
-
-    // Start with second polynomial to give a power of 2, add on first at the end
-    u32* lagrange_tmp_even = lagrange_tmp+n_samps;
-
-    required_threads = (n_samps)*n_samps;
-    threadsPerBlock = required_threads>256? 256 : required_threads;
-    blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
-
-    u32* lagrange_polynomials = new u32[required_threads];
-
-    compute_sub_pols<<<blocksPerGrid, threadsPerBlock>>>(lagrange, lagrange_tmp, denoms, probes, probe_stride, n_samps, prime, required_threads);
-
-    for (int i=0; i<iterations; i++)
-    {
-        required_threads = (1<<(iterations-i-1))*n_samps;
-        threadsPerBlock = required_threads>256? 256 : required_threads;
-        blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
-
-        reduce_lagrange_level<<<blocksPerGrid, threadsPerBlock>>>(lagrange_tmp_even, n_samps, n_vars, i, prime, required_threads);
-    }
-
-    reduce_lagrange_final<<<blocksPerGrid, threadsPerBlock>>>(lagrange_tmp, probes, probe_stride, n_samps, prime, required_threads);
-}
-
 // TODO: make required threads a long
 // Fills in a row in the new probe matrix by reducing the sum of lagrange polynomials to a single polynomial
 void reduce_lagrange_nd(u32* lagrange, u32* lagrange_tmp, u32* denoms, u32* probes, u32* probes_tmp, int n_samps, int n_vars, int dim, u32 prime)
@@ -438,7 +338,7 @@ void reduce_lagrange_nd(u32* lagrange, u32* lagrange_tmp, u32* denoms, u32* prob
 }
 
 // TDOD: either switch to Karatsuba algorithm or FFT use Barett algorithm for division
-void interpolate_dense(const std::vector<std::string> &tokens, const std::vector<std::string> &var_labels, int two_exponent, const std::string &ntt_primes, u32* results)
+u32* interpolate_dense(const std::vector<std::string> &tokens, const std::vector<std::string> &var_labels, int two_exponent, const std::string &ntt_primes)
 {
     int deviceCount = 0;
     CUDA_SAFE_CALL(cudaGetDeviceCount(&deviceCount));
@@ -495,13 +395,13 @@ void interpolate_dense(const std::vector<std::string> &tokens, const std::vector
     int blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
 
     // Computre all probes
-    cu_string<STRING_LEN>* cu_tokens = to_cu_string(tokens);
-    cu_string<STRING_LEN>* cu_var_labels = to_cu_string(var_labels);
-    cu_string<STRING_LEN> *d_cu_tokens, *d_cu_var_labels;
+    cu_type::string<STRING_LEN>* cu_tokens = to_cu_string(tokens);
+    cu_type::string<STRING_LEN>* cu_var_labels = to_cu_string(var_labels);
+    cu_type::string<STRING_LEN> *d_cu_tokens, *d_cu_var_labels;
     u32 *d_stack_allocation;
 
-    size_t bytes_tokens = tokens.size()*sizeof(cu_string<STRING_LEN>);
-    size_t bytes_var_labels = var_labels.size()*sizeof(cu_string<STRING_LEN>);
+    size_t bytes_tokens = tokens.size()*sizeof(cu_type::string<STRING_LEN>);
+    size_t bytes_var_labels = var_labels.size()*sizeof(cu_type::string<STRING_LEN>);
 
     size_t stack_depth = get_max_depth(tokens);
     size_t stack_allocation_size = stack_depth * required_threads;
@@ -574,12 +474,12 @@ void interpolate_dense(const std::vector<std::string> &tokens, const std::vector
     }
 
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
-    CUDA_SAFE_CALL(cudaMemcpy(results, d_probes, bytes_probes, cudaMemcpyDeviceToHost));
+    CUDA_SAFE_CALL(cudaMemcpy(probes, d_probes, bytes_probes, cudaMemcpyDeviceToHost));
 
     std::vector<double> probe_vec(probe_len);
     for (int i=0; i<probe_len; i++)
     {
-        probe_vec[i] = results[i];
+        probe_vec[i] = probes[i];
     }
 
     std::string poly = nd_poly_to_string_flat(probe_vec, var_labels, n_samps, prime);
@@ -598,6 +498,7 @@ void interpolate_dense(const std::vector<std::string> &tokens, const std::vector
     delete[] lagrange_polynomials;
     delete[] cu_var_labels;
     delete[] cu_tokens;
-    delete[] probes;
     delete[] xs;
+
+    return probes;
 }

@@ -11,11 +11,11 @@
 
 // Compute all probes before allocating the memory for the reconstruction to avoid running out
 
-__device__ u32 detokenize(u32* stack_allocation, const cu_string<STRING_LEN>* tokens, const cu_string<STRING_LEN>* var_labels, int max_stack, int thread_id, int token_len, int n_vars, u32 *vars, u32 prime)
+__device__ u32 detokenize(u32* stack_allocation, const cu_type::string<STRING_LEN>* tokens, const cu_type::string<STRING_LEN>* var_labels, int max_stack, int thread_id, int token_len, int n_vars, u32 *vars, u32 prime)
 {
-	stack<u32> US(stack_allocation, thread_id, max_stack);
+	cu_type::stack<u32> US(stack_allocation, thread_id, max_stack);
 	for(int i=0; i<token_len; i++){
-		cu_string token = tokens[i];
+		cu_type::string token = tokens[i];
 		if(!is_operator(token)){
             US.push(to_u32(token, vars, var_labels, n_vars));
 		}
@@ -32,12 +32,12 @@ __device__ u32 detokenize(u32* stack_allocation, const cu_string<STRING_LEN>* to
 	return US.top();
 }
 
-__device__ u32 to_u32(cu_string<STRING_LEN> &token, u32 *vars, const cu_string<STRING_LEN>* var_labels, int n_vars)
+__device__ u32 to_u32(cu_type::string<STRING_LEN> &token, u32 *vars, const cu_type::string<STRING_LEN>* var_labels, int n_vars)
 {
     int count = 0;
     for (int i=0; i<n_vars; i++)
     {
-		cu_string v = var_labels[i];
+		cu_type::string v = var_labels[i];
 
         if (token == v)
         {
@@ -48,7 +48,7 @@ __device__ u32 to_u32(cu_string<STRING_LEN> &token, u32 *vars, const cu_string<S
     return strtou(token);
 }
 
-__device__ bool is_operator(const cu_string<STRING_LEN> &token)
+__device__ bool is_operator(const cu_type::string<STRING_LEN> &token)
 {
 	if(token == "+" || token == "-" || token == "*" || token == "/" || token == "^"){
 		return true;
@@ -58,7 +58,7 @@ __device__ bool is_operator(const cu_string<STRING_LEN> &token)
 	}
 }
 
-__device__ u32 operator_to_function(const cu_string<STRING_LEN> &op, u32 L, u32 R, u32 prime){
+__device__ u32 operator_to_function(const cu_type::string<STRING_LEN> &op, u32 L, u32 R, u32 prime){
 	u32 result;
 
 		if(op == "+"){ 
@@ -80,9 +80,9 @@ __device__ u32 operator_to_function(const cu_string<STRING_LEN> &op, u32 L, u32 
 	return result;
 }
 
-__host__ cu_string<STRING_LEN>* to_cu_string(const std::vector<std::string> &tokens)
+__host__ cu_type::string<STRING_LEN>* to_cu_string(const std::vector<std::string> &tokens)
 {
-	cu_string<STRING_LEN>* result = new cu_string<STRING_LEN>[tokens.size()];
+	cu_type::string<STRING_LEN>* result = new cu_type::string<STRING_LEN>[tokens.size()];
 	for (int i=0; i<tokens.size(); i++)
 	{
 		result[i] = tokens[i];
