@@ -23,6 +23,7 @@ if(NOT DEFINED CMAKE_CUDA_STANDARD)
 endif()
 
 include(FetchContent)
+configure_file(${CMAKE_SOURCE_DIR}/precomp/primes_roots_14.csv ${CMAKE_BINARY_DIR}/primes_roots_14.csv COPYONLY)
 
 add_subdirectory(src)
 

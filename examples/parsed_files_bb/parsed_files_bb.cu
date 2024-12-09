@@ -2,6 +2,7 @@
 #include "GPUFR/bb_gen.hpp"
 #include "GPUFR/nvrtc_helper.hpp"
 #include "GPUFR/parser.hpp"
+#include "GPUFR/interp_data.cuh"
 
 #include <nvrtc.h>
 #include <cuda.h>
@@ -24,6 +25,8 @@ int main(int argc, char* argv[])
 
     int n_vars = var_lables.size();
     int two_exp = 2;
+
+    interp_data id(3, var_lables.size());
 
     u32* results = interpolate_dense(tokens, var_lables, two_exp, ntt_primes);
 

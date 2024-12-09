@@ -10,7 +10,6 @@
 #include <vector>
 #include <cmath>
 #include <sstream>
-#include <iomanip>
 
 #include <cuda.h>
 
@@ -19,6 +18,7 @@
 #include "GPUFR/ntt.cuh"
 #include "GPUFR/detokenize.cuh"
 #include "GPUFR/parser.hpp"
+#include "GPUFR/interp_data.cuh"
 
 __global__ void compute_probes_tokens(u32* stack_allocation, const cu_type::string<STRING_LEN>* tokens, const cu_type::string<STRING_LEN>* var_labels, int token_len, const u32 *xs, u32 *probes, u32 *probes_2, size_t max_stack, int n_vars, int n_samps, u32 prime, int required_threads);
 
@@ -46,8 +46,7 @@ __global__ void reduce_sum_kernel(u32 *lagrange, u32* probes, u32 *output_probes
 
 void reduce_lagrange_nd(u32* lagrange, u32* lagrange_tmp, u32* denoms, u32* probes, u32* probes_tmp, int n_samps, int n_vars, int dim, u32 prime);
 
-std::string nd_poly_to_string_flat(const std::vector<double>& coef_flat, const std::vector<std::string>& variables, int n_samps, u32 prime);
-
 u32* interpolate_dense(const std::vector<std::string> &tokens, const std::vector<std::string> &var_labels, int two_exponent, const std::string &ntt_primes);
 
-__host__ __device__ void print_vec(const u32* vec, int size, u32 prime);
+void interpolate_dense(interp_data &id, const std::vector<std::string> &tokens, const std::vector<std::string> &var_labels, const std::string &ntt_primes);
+
