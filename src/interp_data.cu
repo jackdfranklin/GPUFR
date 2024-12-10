@@ -2,9 +2,19 @@
 
 std::vector<u32> interp_data::next_prime()
 {
-    std::vector<u32> ws get_w(NTT_PRIMES, prime_id);
+    std::vector<u32> ws = std::vector<u32>(std::begin(precomp[prime_id]), std::end(precomp[prime_id]));
     prime_id += 1;
     return ws;
+}
+
+const std::vector<std::string>& interp_data::get_tokens()
+{
+    return tokens;
+}
+
+const std::vector<std::string>& interp_data::get_vars()
+{
+    return variables;
 }
 
 void interp_data::add_result(u32* probes, u32 prime)

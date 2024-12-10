@@ -61,6 +61,26 @@ def primes_roots(start, two_exp, number):
     
     return primes_roots
 
+def save_as_cpp_array(array, filename, variable_name):
+    """
+    Saves a multidimensional NumPy array to a file as a C++ array.
+    
+    :param array: Multidimensional NumPy array to save.
+    :param filename: Name of the output .h file.
+    :param variable_name: Name of the C++ variable to create.
+    """
+    with open(filename, "w") as file:
+        # Write header guard and includes
+        file.write("#pragma once\n\n")
+        file.write("#include \"GPUFR/types.hpp\"\n\n")
+        
+        # Write the array as a C++ array
+        file.write(f"const u32 {variable_name}[{array.shape[0]}][{array.shape[1]}] = {{\n")
+        for row in array:
+            formatted_row = [int(x) for x in row]
+            file.write("    { " + ", ".join(map(str, formatted_row)) + " },\n")
+        file.write("};\n")
+
 # Example: Finding a prime where p-1 is divisible by 2^10
 start_prime = 10**9  # Start search around 100 million
 power_of_2 = 15     # We want p-1 divisible by 2^10 (n = 1024) need to double to capture full NTT
@@ -68,5 +88,6 @@ power_of_2 = 15     # We want p-1 divisible by 2^10 (n = 1024) need to double to
 # np_primes = np.array(good_prime)
 primes_and_roots = primes_roots(start_prime, power_of_2, 50)
 print(primes_and_roots)
-np.savetxt("primes_roots_14.csv", primes_and_roots, fmt='%i')
+# np.savetxt("primes_roots_14.csv", primes_and_roots, fmt='%i')
+save_as_cpp_array(primes_and_roots, "../include/GPUFR/precomp.hpp", "precomp")
 # np.savetxt("primes_13.csv", np_primes, fmt='%i')

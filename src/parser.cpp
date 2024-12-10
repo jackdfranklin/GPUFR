@@ -226,7 +226,7 @@ std::string postfix_to_infix(const std::vector<std::string> &rpn){
 	return S.top();
 }
 
-int get_max_depth(std::vector<std::string> expression)
+int get_max_depth(const std::vector<std::string> expression)
 {
 	int stack_depth = 0;
 	int max_depth = 0;

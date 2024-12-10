@@ -10,7 +10,6 @@
 
 int main(int argc, char* argv[])
 {
-    std::string ntt_primes = argv[1];
     std::ifstream file("/mt/home/jmaxwell/Documents/GPUFR/examples/parsed_files_bb/example_fun.txt"); // Replace with your file's path
     if (!file) {
         std::cerr << "Could not open the file!" << std::endl;
@@ -26,9 +25,9 @@ int main(int argc, char* argv[])
     int n_vars = var_lables.size();
     int two_exp = 2;
 
-    interp_data id(3, var_lables.size());
+    interp_data id(3, var_lables, tokens);
 
-    u32* results = interpolate_dense(tokens, var_lables, two_exp, ntt_primes);
+    interpolate_dense(id);
 
-    delete[] results;
+    std::cout << id.to_str() << std::endl;
 }

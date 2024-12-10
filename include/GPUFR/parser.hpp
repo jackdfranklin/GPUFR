@@ -26,5 +26,5 @@ std::string operator_to_function(const std::string &op, const std::string &L, co
 
 std::string postfix_to_infix(const std::vector<std::string> &rpn);
 
-int get_max_depth(std::vector<std::string> expression);
+int get_max_depth(const std::vector<std::string> expression);
 

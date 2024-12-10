@@ -59,7 +59,7 @@ TEST_CASE("ntt_test"){
 
     CUDA_SAFE_CALL(cudaMemcpy(out_arr, d_out_arr, bytes_arr, cudaMemcpyDeviceToHost));
 
-    print_vec(out_arr, arr_size, prime);
+    // print_vec(out_arr, arr_size, prime);
 
     CUDA_SAFE_CALL(cudaFree(d_in_arr));
     CUDA_SAFE_CALL(cudaFree(d_out_arr));

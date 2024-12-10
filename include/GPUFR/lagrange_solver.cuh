@@ -48,5 +48,5 @@ void reduce_lagrange_nd(u32* lagrange, u32* lagrange_tmp, u32* denoms, u32* prob
 
 u32* interpolate_dense(const std::vector<std::string> &tokens, const std::vector<std::string> &var_labels, int two_exponent, const std::string &ntt_primes);
 
-void interpolate_dense(interp_data &id, const std::vector<std::string> &tokens, const std::vector<std::string> &var_labels, const std::string &ntt_primes);
+void interpolate_dense(interp_data &id);
 

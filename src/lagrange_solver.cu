@@ -463,7 +463,7 @@ u32* interpolate_dense(const std::vector<std::string> &tokens, const std::vector
     return probes;
 }
 
-void interpolate_dense(interp_data &id, const std::vector<std::string> &tokens, const std::vector<std::string> &var_labels, const std::string &ntt_primes)
+void interpolate_dense(interp_data &id)
 {
     int deviceCount = 0;
     CUDA_SAFE_CALL(cudaGetDeviceCount(&deviceCount));
@@ -520,15 +520,15 @@ void interpolate_dense(interp_data &id, const std::vector<std::string> &tokens, 
     int blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
 
     // Computre all probes
-    cu_type::string<STRING_LEN>* cu_tokens = to_cu_string(tokens);
-    cu_type::string<STRING_LEN>* cu_var_labels = to_cu_string(var_labels);
+    cu_type::string<STRING_LEN>* cu_tokens = to_cu_string(id.get_tokens());
+    cu_type::string<STRING_LEN>* cu_var_labels = to_cu_string(id.get_vars());
     cu_type::string<STRING_LEN> *d_cu_tokens, *d_cu_var_labels;
     u32 *d_stack_allocation;
 
-    size_t bytes_tokens = tokens.size()*sizeof(cu_type::string<STRING_LEN>);
-    size_t bytes_var_labels = var_labels.size()*sizeof(cu_type::string<STRING_LEN>);
+    size_t bytes_tokens = id.n_tokens*sizeof(cu_type::string<STRING_LEN>);
+    size_t bytes_var_labels = id.n_vars*sizeof(cu_type::string<STRING_LEN>);
 
-    size_t stack_depth = get_max_depth(tokens);
+    size_t stack_depth = get_max_depth(id.get_tokens());
     size_t stack_allocation_size = stack_depth * required_threads;
     size_t bytes_stack_allocation = stack_allocation_size*sizeof(u32);
 
@@ -539,7 +539,7 @@ void interpolate_dense(interp_data &id, const std::vector<std::string> &tokens, 
     CUDA_SAFE_CALL(cudaMemcpy(d_cu_tokens, cu_tokens, bytes_tokens, cudaMemcpyHostToDevice));
     CUDA_SAFE_CALL(cudaMemcpy(d_cu_var_labels, cu_var_labels, bytes_var_labels, cudaMemcpyHostToDevice));
 
-    compute_probes_tokens<<<blocksPerGrid, threadsPerBlock>>>(d_stack_allocation, d_cu_tokens, d_cu_var_labels, tokens.size(), d_xs, d_probes, d_probes_2, stack_depth, n_vars, n_samps, prime, required_threads);
+    compute_probes_tokens<<<blocksPerGrid, threadsPerBlock>>>(d_stack_allocation, d_cu_tokens, d_cu_var_labels, id.n_tokens, d_xs, d_probes, d_probes_2, stack_depth, n_vars, n_samps, prime, required_threads);
 
     CUDA_SAFE_CALL(cudaFree(d_stack_allocation));
 
