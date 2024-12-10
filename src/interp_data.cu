@@ -1,5 +1,21 @@
 #include "GPUFR/interp_data.cuh"
 
+interp_data::interp_data(int max_power, const std::vector<std::string> &tokens_list, const std::vector<std::string> &var_labels) : variables(var_labels), tokens(tokens_list)
+{
+    two_exponent = 0;
+    n_samps = (1<<two_exponent) + 1;
+    n_vars = variables.size();
+    n_tokens = tokens.size();
+    while (n_samps <= max_power)
+    {
+        two_exponent += 1;
+        n_samps = (1<<two_exponent) + 1; 
+    }
+
+    flat_size = pow(n_samps, n_vars);
+    prime_id = 0;
+}
+
 std::vector<u32> interp_data::next_prime()
 {
     std::vector<u32> ws = std::vector<u32>(std::begin(precomp[prime_id]), std::end(precomp[prime_id]));
@@ -44,4 +60,12 @@ std::string interp_data::to_str()
         }
     }
     return result.str();
+}
+
+interp_data::~interp_data()
+{
+    for (int i=0; i<dense_results.size(); i++)
+    {
+        delete[] dense_results[i];
+    }
 }

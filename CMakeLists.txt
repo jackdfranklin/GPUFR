@@ -10,7 +10,15 @@ set(CMAKE_CXX_FLAGS_DEBUG " -g -O0")
 # Release flags (add optimizations)
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 set(CMAKE_CUDA_FLAGS_RELEASE "-O3")
+
+set(CMAKE_MODULE_PATH
+    ${CMAKE_CURRENT_LIST_DIR}/cmake
+    ${CMAKE_MODULE_PATH}
+)
+
 find_package(CUDAToolkit REQUIRED)
+find_package(GMP REQUIRED)
+include_directories(${GMP_INCLUDES})
 
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
 	add_subdirectory(examples)
@@ -23,7 +31,6 @@ if(NOT DEFINED CMAKE_CUDA_STANDARD)
 endif()
 
 include(FetchContent)
-configure_file(${CMAKE_SOURCE_DIR}/precomp/primes_roots_14.csv ${CMAKE_BINARY_DIR}/primes_roots_14.csv COPYONLY)
 
 add_subdirectory(src)
 

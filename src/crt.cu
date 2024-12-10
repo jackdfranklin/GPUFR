@@ -43,3 +43,43 @@ void compute_crt(u32** in_arrs, u32* moduli, u64* out_arr, int arr_size, int n_m
         }
     }
 }
+
+void compute_crt(u32** in_arrs, u32* moduli, mpz_t* out_arr, int arr_size, int n_moduli)
+{
+    mpz_t M, p, partial_mult;
+    mpz_init(M);
+    mpz_init(p);
+    mpz_init(partial_mult);
+    mpz_set_ui(M, 1);
+
+    mpz_t* Ms = new mpz_t[n_moduli];
+    mpz_t* ys = new mpz_t[n_moduli];
+    for (int i=0; i<n_moduli; i++) 
+    {
+        mpz_init(Ms[i]);
+        mpz_init(ys[i]);
+
+        mpz_mul_ui(M, M, moduli[i]);
+    }
+
+    for (int i=0; i<n_moduli; i++) 
+    {
+        mpz_set_ui(p, moduli[i]);
+        mpz_div_ui(Ms[i], M, moduli[i]);
+        mpz_invert(ys[i], Ms[i], p);
+    }
+
+    for (int i=0; i<arr_size; i++) 
+    {
+        mpz_set_ui(out_arr[i], 0);
+        for (int j=0; j<n_moduli; j++) 
+        {
+            mpz_mul_ui(partial_mult, Ms[j], in_arrs[j][i]);
+            mpz_mod(partial_mult, partial_mult, M);
+            mpz_mul(partial_mult, partial_mult,  ys[j]);
+            mpz_mod(partial_mult, partial_mult, M);
+            mpz_add(out_arr[i], out_arr[i], partial_mult);
+            mpz_mod(out_arr[i], out_arr[i], M);
+        }
+    }
+}
