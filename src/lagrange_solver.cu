@@ -480,7 +480,7 @@ void interpolate_dense(interp_data &id)
     int probe_len = id.flat_size;
     int initial_pol_size = 4;
     int lagrange_size = n_vars*(n_samps-1)*n_samps*initial_pol_size;
-    
+
     u32* lagrange_polynomials = new u32[lagrange_size];
     u32* probes = new u32[probe_len];
     u32* xs = new u32[n_vars*n_samps];

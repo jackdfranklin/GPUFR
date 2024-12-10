@@ -34,7 +34,7 @@ class interp_data
         n_samps = (1<<two_exponent) + 1;
         n_vars = variables.size();
         n_tokens = tokens.size();
-        while (n_samps < max_power)
+        while (n_samps <= max_power)
         {
             two_exponent += 1;
             n_samps = (1<<two_exponent) + 1; 

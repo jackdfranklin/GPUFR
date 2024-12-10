@@ -25,7 +25,7 @@ int main(int argc, char* argv[])
     int n_vars = var_lables.size();
     int two_exp = 2;
 
-    interp_data id(3, var_lables, tokens);
+    interp_data id(3, tokens, var_lables);
 
     interpolate_dense(id);
 
