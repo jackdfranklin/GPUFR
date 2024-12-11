@@ -16,12 +16,17 @@ interp_data::interp_data(int max_power, const std::vector<std::string> &tokens_l
     prime_id = 0;
 }
 
-std::vector<u32> interp_data::next_prime()
+// Returns a vector of the prime followed by successive roots of unity
+std::vector<u32> interp_data::get_prime_roots()
 {
-    std::vector<u32> ws = std::vector<u32>(std::begin(precomp[prime_id]), std::end(precomp[prime_id]));
-    prime_id += 1;
-    return ws;
+    return std::vector<u32>(std::begin(precomp[prime_id]), std::end(precomp[prime_id]));
 }
+
+void interp_data::next_prime()
+{
+    prime_id += 1;
+}
+
 
 const std::vector<std::string>& interp_data::get_tokens()
 {

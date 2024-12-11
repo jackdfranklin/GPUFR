@@ -4,6 +4,9 @@
 #include "GPUFR/ff_math.cuh"
 #include "GPUFR/stack.cuh"
 #include "GPUFR/string.cuh"
+#include "GPUFR/parser.hpp"
+
+#include <gmp.h>
 
 #include <vector>
 #include <string>
@@ -20,3 +23,7 @@ __device__ bool is_operator(const cu_type::string<STRING_LEN> &token);
 __device__ u32 operator_to_function(const cu_type::string<STRING_LEN> &op, u32 L, u32 R, u32 prime);
 
 __host__ cu_type::string<STRING_LEN>* to_cu_string(const std::vector<std::string> &tokens);
+
+__host__ cu_type::string<STRING_LEN>* to_cu_string(const std::vector<std::string> &tokens, const std::vector<std::string> &vars, u32 prime);
+
+

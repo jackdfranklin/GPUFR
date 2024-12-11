@@ -9,6 +9,7 @@
 #include "GPUFR/ff_math.cuh"
 #include "GPUFR/ntt.cuh"
 #include "GPUFR/precomp.hpp"
+#include "GPUFR/parser.hpp"
 
 #define NTT_PRIMES "primes_roots_14.csv"
 
@@ -30,9 +31,13 @@ class interp_data
 
     interp_data(int max_power, const std::vector<std::string> &tokens_list, const std::vector<std::string> &var_labels);
 
-    std::vector<u32> next_prime();
+    std::vector<u32> get_prime_roots();
+
+    void next_prime();
 
     const std::vector<std::string>& get_tokens();
+
+    const std::vector<std::string>& get_tokens_mod(u32 prime);
     
     const std::vector<std::string>& get_vars();
 
@@ -42,3 +47,6 @@ class interp_data
 
     ~interp_data();
 };
+
+// todo handle taking modulus in first instance to compute the tokens 
+// have a function to increment the prime when ready

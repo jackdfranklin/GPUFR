@@ -80,12 +80,6 @@ TEST_CASE("CRT Small Test"){
 }
 
 TEST_CASE("CRT GMP Test"){
-    // Generate 2 arrays of u64 numbers
-    // Take modulo wrt 2 differernt moduli
-    // Generate 3rd output arr
-    // Pass all to crt
-    // Check input arr matches output
-
     int arr_size = 1;
     u32 primes[] = {1000112129,
                     1000210433,
@@ -116,11 +110,13 @@ TEST_CASE("CRT GMP Test"){
     }
 
     compute_crt(mod_arrs, primes, out_arr, arr_size, n_moduli);
-    gmp_printf("The value of base_arr is: %Zd\n", base_arr[0]);
-    gmp_printf("The value of out_arr is: %Zd\n", out_arr[0]);
 
     for (int i=0; i<arr_size; i++)
     {
         REQUIRE(mpz_cmp(out_arr[i], base_arr[i]) == 0); 
     }
+
+    mpz_clear(tmp);
+    mpz_clear(base_arr[0]);
+    mpz_clear(out_arr[0]);
 }

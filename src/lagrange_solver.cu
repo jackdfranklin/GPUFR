@@ -324,6 +324,7 @@ u32* interpolate_dense(const std::vector<std::string> &tokens, const std::vector
     std::vector<u32> ws = get_w(ntt_primes, 0);
     u32 prime = ws[0];
 
+    // Generate probes 
     for (int i=0; i<n_vars; i++)
     {
         for (int j=0; j<n_samps; j++)
@@ -486,7 +487,7 @@ void interpolate_dense(interp_data &id)
     u32* xs = new u32[n_vars*n_samps];
     std::srand(time(0));
 
-    std::vector<u32> ws = id.next_prime();
+    std::vector<u32> ws = id.get_prime_roots();
     u32 prime = ws[0];
 
     for (int i=0; i<n_vars; i++)
@@ -520,7 +521,8 @@ void interpolate_dense(interp_data &id)
     int blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
 
     // Computre all probes
-    cu_type::string<STRING_LEN>* cu_tokens = to_cu_string(id.get_tokens());
+    // Get the tokens modulo the prime in gpu compatible format
+    cu_type::string<STRING_LEN>* cu_tokens = to_cu_string(id.get_tokens(), id.get_vars(), prime);
     cu_type::string<STRING_LEN>* cu_var_labels = to_cu_string(id.get_vars());
     cu_type::string<STRING_LEN> *d_cu_tokens, *d_cu_var_labels;
     u32 *d_stack_allocation;
@@ -617,4 +619,6 @@ void interpolate_dense(interp_data &id)
     delete[] cu_var_labels;
     delete[] cu_tokens;
     delete[] xs;
+
+    id.next_prime();
 }

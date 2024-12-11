@@ -82,4 +82,16 @@ void compute_crt(u32** in_arrs, u32* moduli, mpz_t* out_arr, int arr_size, int n
             mpz_mod(out_arr[i], out_arr[i], M);
         }
     }
+
+    mpz_clear(M);
+    mpz_clear(p);
+    mpz_clear(partial_mult);
+
+    for (int i=0; i<n_moduli; i++) 
+    {
+        mpz_clear(Ms[i]);
+        mpz_clear(ys[i]);
+    }
 }
+
+// todo make a function that will just append one moduli to the set

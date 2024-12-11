@@ -86,6 +86,17 @@ namespace cu_type
             }
             data[len] = '\0';
         }
+
+        template<int r_size>
+        __host__ inline void operator=(const char (&r_val)[r_size])
+        {
+            int len = size_val < r_size? size_val : r_size;
+            for (int i=0; i<len; i++)
+            {
+                data[i] = r_val[i];
+            }
+            data[len] = '\0';
+        }
     };
 
     template<int m, int n>
