@@ -53,7 +53,7 @@ std::string interp_data::to_str()
     for (size_t i = 0; i < flat_size; ++i) {
         double c = dense_results[0][i];
         if (sqrt(pow(c, 2)) >= 1) {
-            c = c > primes[0]/2.0 ? c-primes[0] : c;
+            // c = c > primes[0]/2.0 ? c-primes[0] : c;
             result << (c > 0 && result.tellp() > 0 ? "+ " : "") << std::fixed << std::setprecision(0) << c;
             for (int j = 0; j < dim; ++j) {
                 int power = static_cast<int>(std::floor(i / std::pow(n_samps, j))) % n_samps;

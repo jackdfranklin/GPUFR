@@ -295,6 +295,8 @@ void reduce_lagrange_nd(u32* lagrange, u32* lagrange_tmp, u32* denoms, u32* prob
     int probe_step_large = pow(n_samps, dim+1);
 
     reduce_sum_kernel<<<blocksPerGrid, threadsPerBlock>>>(lagrange_tmp, probes, probes_tmp, n_samps, n_vars, dim, probe_step, probe_step_large, iterations, prime, required_threads);
+
+    delete[] lagrange_polynomials;
 }
 
 // TDOD: either switch to Karatsuba algorithm or FFT use Barett algorithm for division
@@ -494,7 +496,7 @@ void interpolate_dense(interp_data &id)
     {
         for (int j=0; j<n_samps; j++)
         {
-            int flat_index = i*n_samps + j+1;
+            int flat_index = i*n_samps + j;
             xs[flat_index] = (std::rand())%prime;
         }
     }

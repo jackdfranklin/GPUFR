@@ -37,8 +37,6 @@ class interp_data
 
     const std::vector<std::string>& get_tokens();
 
-    const std::vector<std::string>& get_tokens_mod(u32 prime);
-    
     const std::vector<std::string>& get_vars();
 
     void add_result(u32* probes, u32 prime);
@@ -50,3 +48,5 @@ class interp_data
 
 // todo handle taking modulus in first instance to compute the tokens 
 // have a function to increment the prime when ready
+// make print statement work with mpz_t numbers
+// Have a funciton to call the crt
