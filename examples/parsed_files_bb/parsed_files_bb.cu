@@ -11,7 +11,6 @@
 int main(int argc, char* argv[])
 {
     std::ifstream file("/mt/home/jmaxwell/Documents/GPUFR/precomp/modded_funcs/hh_coeff1_n_1000112129.txt"); // Replace with your file's path
-    // std::ifstream file("/mt/home/jmaxwell/Documents/GPUFR/examples/parsed_files_bb/example_fun.txt"); // Replace with your file's path
     if (!file) {
         std::cerr << "Could not open the file!" << std::endl;
     }
@@ -22,9 +21,6 @@ int main(int argc, char* argv[])
 
     std::vector<std::string> tokens = parse_expression(fileContents);
     std::vector<std::string> var_lables = {"s", "t"};
-
-    int n_vars = var_lables.size();
-    int two_exp = 2;
 
     interp_data id(100, tokens, var_lables);
 
