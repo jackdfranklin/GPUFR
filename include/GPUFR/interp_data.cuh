@@ -6,19 +6,26 @@
 #include <cmath>
 #include <iomanip>
 
+#include <gmp.h>
+
 #include "GPUFR/ff_math.cuh"
 #include "GPUFR/ntt.cuh"
 #include "GPUFR/precomp.hpp"
 #include "GPUFR/parser.hpp"
+#include "GPUFR/crt.cuh"
 
 #define NTT_PRIMES "primes_roots_14.csv"
 
 class interp_data
 {
     private:
+    bool is_mpz_init;
     int prime_id;
-    std::vector<u32> primes;
-    std::vector<u32*> dense_results;
+
+    mpz_t crt_prime;
+    mpz_t* dense_mpz;
+    mpz_t* dense_mpz_tmp;
+
     std::vector<std::string> variables;
     std::vector<std::string> tokens;
 
@@ -40,6 +47,8 @@ class interp_data
     const std::vector<std::string>& get_vars();
 
     void add_result(u32* probes, u32 prime);
+
+    void combine_last_result();
 
     std::string to_str();
 

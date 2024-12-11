@@ -14,3 +14,5 @@ void compute_crt(u32** in_arrs, u32* moduli, mpz_t* out_arr, int arr_size, int n
 
 void compute_crt(mpz_t* out_arr, mpz_t* in1, mpz_t* in2, mpz_t mod_1, mpz_t mod_2, int arr_size);
 
+void compute_crt(mpz_t* out_arr, mpz_t* in1, u32* in2, mpz_t mod_1, u32 mod_2, int arr_size);
+

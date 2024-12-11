@@ -25,6 +25,7 @@ int main(int argc, char* argv[])
     interp_data id(100, tokens, var_lables);
 
     interpolate_dense(id);
+    interpolate_dense(id);
 
     std::cout << id.to_str() << std::endl;
 }
