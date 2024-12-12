@@ -120,3 +120,46 @@ TEST_CASE("CRT GMP Test"){
     mpz_clear(base_arr[0]);
     mpz_clear(out_arr[0]);
 }
+
+TEST_CASE("CRT GMP u32 Test"){
+    int arr_size = 1;
+
+    std::string big_num = "10001121281000112128100011212";
+
+    mpz_t big_mpz;
+    mpz_init(big_mpz);
+    mpz_set_str(big_mpz, big_num.c_str(), 10);
+
+    mpz_t prime1;
+    mpz_init(prime1);
+    mpz_set_ui(prime1, 18446744073709551557);
+    mpz_t arr1[arr_size];
+    mpz_init(arr1[0]);
+    mpz_set_str(arr1[0], big_num.c_str(), 10);
+    mpz_mod(arr1[0], arr1[0], prime1);
+
+    u32 prime2 = 1000112129;
+    mpz_t tmp;
+    mpz_init(tmp);
+    mpz_set_str(tmp, big_num.c_str(), 10);
+    mpz_mod_ui(tmp, tmp, prime2);
+    u32 arr2[arr_size];
+    arr2[0] = mpz_get_ui(tmp);
+
+    mpz_t out_arr[arr_size];
+    mpz_init(out_arr[0]);
+
+    compute_crt(out_arr, arr1, arr2, prime1, prime2, arr_size);
+
+    for (int i=0; i<arr_size; i++)
+    {
+        REQUIRE(mpz_cmp(out_arr[i], big_mpz) == 0); 
+    }
+
+    mpz_clear(tmp);
+    mpz_clear(big_mpz);
+    mpz_clear(prime1);
+    mpz_clear(tmp);
+    mpz_clear(arr1[0]);
+    mpz_clear(out_arr[0]);
+}

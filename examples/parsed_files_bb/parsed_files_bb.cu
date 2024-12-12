@@ -10,7 +10,8 @@
 
 int main(int argc, char* argv[])
 {
-    std::ifstream file("/mt/home/jmaxwell/Documents/GPUFR/precomp/modded_funcs/hh_coeff1_n_1000112129.txt"); // Replace with your file's path
+    std::ifstream file("/mt/home/jmaxwell/Documents/GPUFR/precomp/modded_funcs/hh_coeff1_n.txt"); // Replace with your file's path
+    // std::ifstream file("/mt/home/jmaxwell/Documents/GPUFR/examples/parsed_files_bb/example_fun.txt"); // Replace with your file's path
     if (!file) {
         std::cerr << "Could not open the file!" << std::endl;
     }
@@ -24,8 +25,11 @@ int main(int argc, char* argv[])
 
     interp_data id(100, tokens, var_lables);
 
-    interpolate_dense(id);
-    interpolate_dense(id);
+    for (int i=0; i<18; i++)
+    {
+        interpolate_dense(id);
+    }
+
 
     std::cout << id.to_str() << std::endl;
 }

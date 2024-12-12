@@ -86,7 +86,7 @@ start_prime = 10**9  # Start search around 100 million
 power_of_2 = 15     # We want p-1 divisible by 2^10 (n = 1024) need to double to capture full NTT
 # good_prime = find_good_prime(start_prime, power_of_2, 500)
 # np_primes = np.array(good_prime)
-primes_and_roots = primes_roots(start_prime, power_of_2, 50)
+primes_and_roots = primes_roots(start_prime, power_of_2, 500)
 print(primes_and_roots)
 # np.savetxt("primes_roots_14.csv", primes_and_roots, fmt='%i')
 save_as_cpp_array(primes_and_roots, "../include/GPUFR/precomp.hpp", "precomp")

@@ -126,6 +126,8 @@ void compute_crt(mpz_t* out_arr, mpz_t* in1, mpz_t* in2, mpz_t mod_1, mpz_t mod_
 
     for (int i=0; i<arr_size; i++) 
     {
+        mpz_set_ui(out_arr[i], 0);
+
         mpz_mul(partial_mult, Ms[0], in1[i]);
         mpz_mod(partial_mult, partial_mult, M);
         mpz_mul(partial_mult, partial_mult,  ys[0]);
@@ -182,6 +184,7 @@ void compute_crt(mpz_t* out_arr, mpz_t* in1, u32* in2, mpz_t mod_1, u32 mod_2, i
 
     for (int i=0; i<arr_size; i++) 
     {
+        mpz_set_ui(out_arr[i], 0);
         mpz_mul(partial_mult, Ms[0], in1[i]);
         mpz_mod(partial_mult, partial_mult, M);
         mpz_mul(partial_mult, partial_mult,  ys[0]);
