@@ -67,18 +67,39 @@ std::string interp_data::to_str()
     int dim = n_vars;
     std::string str_coeff;
     bool is_zero;
-    mpz_t zero;
+    int is_neg;
+    mpz_t zero, hlf_prime, tmp_res;
     mpz_init(zero);
+    mpz_init(hlf_prime);
+    mpz_init(tmp_res);
     mpz_set_ui(zero, 0);
+    mpz_div_ui(hlf_prime, crt_prime, 2);
 
     std::ostringstream result;
     for (size_t i = 0; i < flat_size; ++i) {
-        char* c_str = mpz_get_str(nullptr, 10, dense_mpz[i]);  // Convert to a C-style string in base 10
-        str_coeff = c_str; 
         is_zero = (mpz_cmp(dense_mpz[i], zero) == 0);
         if (!is_zero)
         {
-            result << (result.tellp() > 0 ? "+ " : "") << str_coeff;
+            is_neg = mpz_cmp(dense_mpz[i], hlf_prime);
+
+            if (is_neg > 0)
+            {
+                mpz_sub(tmp_res, dense_mpz[i], crt_prime);
+                mpz_mul_si(tmp_res, tmp_res, -1);
+            } else {
+                mpz_set(tmp_res, dense_mpz[i]);
+            }
+
+            char* c_str = mpz_get_str(nullptr, 10, tmp_res);  // Convert to a C-style string in base 10
+            str_coeff = c_str;
+
+            if (result.tellp() > 0)
+            {
+                result << (is_neg < 0 ? "+ " : "- ") << str_coeff;
+            } else {
+                result << (is_neg < 0 ? "" : "-") << str_coeff;
+            }
+            
             for (int j = 0; j < dim; ++j) {
                 int power = static_cast<int>(std::floor(i / std::pow(n_samps, j))) % n_samps;
                 if (power > 0) {
@@ -92,7 +113,9 @@ std::string interp_data::to_str()
         // freefunc(c_str, std::strlen(c_str) + 1);
     }
 
-
+    mpz_clear(zero);
+    mpz_clear(hlf_prime);
+    mpz_clear(tmp_res);
     return result.str();
 }
 

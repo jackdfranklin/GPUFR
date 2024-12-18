@@ -25,7 +25,7 @@ int main(int argc, char* argv[])
 
     interp_data id(100, tokens, var_lables);
 
-    for (int i=0; i<18; i++)
+    for (int i=0; i<19; i++)
     {
         interpolate_dense(id);
     }
