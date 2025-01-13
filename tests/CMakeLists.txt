@@ -57,6 +57,11 @@ target_link_libraries(token_test PRIVATE gpufr Catch2::Catch2WithMain ${FLINT_LI
 target_include_directories(token_test PRIVATE ${FLINT_INCLUDE_DIRS})
 set_target_properties(token_test PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
+add_executable(arithmatic_benchmarking arithmatic_benchmarking.cu)
+target_link_libraries(arithmatic_benchmarking PRIVATE gpufr ${FLINT_LINK_LIBRARIES} CUDA::nvrtc)
+target_include_directories(arithmatic_benchmarking PRIVATE ${FLINT_INCLUDE_DIRS})
+set_target_properties(arithmatic_benchmarking PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+
 # add_executable(parse_file parser_file.cpp)
 # target_link_libraries(parse_file PRIVATE gpufr Catch2::Catch2WithMain ${FLINT_LINK_LIBRARIES} CUDA::nvrtc)
 # target_include_directories(parse_file PRIVATE ${FLINT_INCLUDE_DIRS})
@@ -73,4 +78,5 @@ add_test(NAME ChineseRemainder_test COMMAND crt_test)
 add_test(NAME ParserTest COMMAND parser_test)
 add_test(NAME BBGenTest COMMAND bb_test)
 add_test(NAME token_test COMMAND token_test)
+add_test(NAME arithmatic_benchmarking COMMAND arith_ben)
 # add_test(NAME parse_file COMMAND pf_test)
