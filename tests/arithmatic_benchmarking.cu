@@ -2,7 +2,7 @@
 #include "GPUFR/types.hpp"
 #include "GPUFR/cuda_safe_call.cuh"
 
-#define N_SAMPS 10000000
+#define N_SAMPS 1000000000
 #define PRIME 1000112129
 #define R 1<<31
 #define RI 965821785
@@ -90,6 +90,7 @@ int main()
     float time1, time2;
     float total_time1 = 0;
     float total_time2 = 0;
+    float total_time3 = 0;
     cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
@@ -121,8 +122,21 @@ int main()
         total_time2 += milliseconds;
     }
 
+    for (int i = 0; i < RUNS; ++i) {
+        cudaEventRecord(start);
+        ff_multiply_fancy<<<blocksPerGrid, threadsPerBlock>>>(d_as, d_bs, d_out2, PRIME, required_threads);
+
+        cudaEventRecord(stop);
+        cudaEventSynchronize(stop);
+
+        float milliseconds = 0;
+        cudaEventElapsedTime(&milliseconds, start, stop);
+        total_time3 += milliseconds;
+    }
+
     std::printf("Average time with cast: %f \n", total_time1/RUNS);
-    std::printf("Average time with fancy: %f \n", total_time2/RUNS);
+    std::printf("Average time with mont: %f \n", total_time2/RUNS);
+    std::printf("Average time with fancy: %f \n", total_time3/RUNS);
 
     // Checking results
     CUDA_SAFE_CALL(cudaMemcpy(out1, d_out1, bytes, cudaMemcpyDeviceToHost));
