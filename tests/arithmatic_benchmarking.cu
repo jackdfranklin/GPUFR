@@ -2,7 +2,7 @@
 #include "GPUFR/types.hpp"
 #include "GPUFR/cuda_safe_call.cuh"
 
-#define N_SAMPS 1000000000
+#define N_SAMPS 10000000
 #define PRIME 1000112129
 #define R 1<<31
 #define RI 965821785
@@ -44,15 +44,9 @@ __global__ void ff_multiply_mont(u32* a, u32* b, u32* out, u32 p, int required_t
 
     if (idx < required_threads)
     {
-        u32 mont_a = (a[idx]*R) % p;
-        u32 mont_b = (b[idx]*R) % p;
-
-        u32 T = mont_a*mont_b;
-
+        u32 T = a[idx]*b[idx];
         u32 m = (T*(p-1))%R;
-
-        u32 u = (T+m*p) / R;
-
+        u32 u = (T+m*p)>>32;
         out[idx] = (u*RI) % p;
     }
 }
@@ -100,7 +94,19 @@ int main()
 
     for (int i = 0; i < RUNS; ++i) {
         cudaEventRecord(start);
-        ff_multiply_cast<<<blocksPerGrid, threadsPerBlock>>>(d_as, d_bs, d_out1, PRIME, required_threads);
+        ff_multiply_fancy<<<blocksPerGrid, threadsPerBlock>>>(d_as, d_bs, d_out2, PRIME, required_threads);
+
+        cudaEventRecord(stop);
+        cudaEventSynchronize(stop);
+
+        float milliseconds = 0;
+        cudaEventElapsedTime(&milliseconds, start, stop);
+        total_time3 += milliseconds;
+    }
+
+    for (int i = 0; i < RUNS; ++i) {
+        cudaEventRecord(start);
+        ff_multiply_cast<<<blocksPerGrid, threadsPerBlock>>>(d_as, d_bs, d_out2, PRIME, required_threads);
 
         cudaEventRecord(stop);
         cudaEventSynchronize(stop);
@@ -112,7 +118,7 @@ int main()
 
     for (int i = 0; i < RUNS; ++i) {
         cudaEventRecord(start);
-        ff_multiply_mont<<<blocksPerGrid, threadsPerBlock>>>(d_as, d_bs, d_out2, PRIME, required_threads);
+        ff_multiply_mont<<<blocksPerGrid, threadsPerBlock>>>(d_as, d_bs, d_out1, PRIME, required_threads);
 
         cudaEventRecord(stop);
         cudaEventSynchronize(stop);
@@ -120,18 +126,6 @@ int main()
         float milliseconds = 0;
         cudaEventElapsedTime(&milliseconds, start, stop);
         total_time2 += milliseconds;
-    }
-
-    for (int i = 0; i < RUNS; ++i) {
-        cudaEventRecord(start);
-        ff_multiply_fancy<<<blocksPerGrid, threadsPerBlock>>>(d_as, d_bs, d_out2, PRIME, required_threads);
-
-        cudaEventRecord(stop);
-        cudaEventSynchronize(stop);
-
-        float milliseconds = 0;
-        cudaEventElapsedTime(&milliseconds, start, stop);
-        total_time3 += milliseconds;
     }
 
     std::printf("Average time with cast: %f \n", total_time1/RUNS);
@@ -146,7 +140,7 @@ int main()
     {
         if (out1[i] != out2[i])
         {
-            std::printf("Result missmach: %i != %i \n", out1, out2);
+            std::printf("Result missmach: %i != %i \n", out1[i], out2[i]);
             return 1;
         }
     }
