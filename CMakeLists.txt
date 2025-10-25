@@ -20,6 +20,9 @@ find_package(CUDAToolkit REQUIRED)
 find_package(GMP REQUIRED)
 include_directories(${GMP_INCLUDES})
 
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(FLINT REQUIRED flint)
+
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
 	add_subdirectory(examples)
 	add_subdirectory(tests)

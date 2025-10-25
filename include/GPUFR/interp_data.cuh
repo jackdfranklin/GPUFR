@@ -36,6 +36,9 @@ class interp_data
     int n_tokens;
     int flat_size;
 
+    u32* device_probes;
+    u32* host_probes; 
+
     interp_data(int max_power, const std::vector<std::string> &tokens_list, const std::vector<std::string> &var_labels);
 
     std::vector<u32> get_prime_roots();

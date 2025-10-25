@@ -19,6 +19,7 @@
 #include "GPUFR/detokenize.cuh"
 #include "GPUFR/parser.hpp"
 #include "GPUFR/interp_data.cuh"
+#include "GPUFR/polynomial.cuh"
 
 __global__ void compute_probes_tokens(u32* stack_allocation, const cu_type::string<STRING_LEN>* tokens, const cu_type::string<STRING_LEN>* var_labels, int token_len, const u32 *xs, u32 *probes, u32 *probes_2, size_t max_stack, int n_vars, int n_samps, u32 prime, int required_threads);
 

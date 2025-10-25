@@ -605,6 +605,11 @@ void interpolate_dense(interp_data &id)
     CUDA_SAFE_CALL(cudaDeviceSynchronize());
     CUDA_SAFE_CALL(cudaMemcpy(probes, d_probes, bytes_probes, cudaMemcpyDeviceToHost));
 
+    for (int i=0; i<probe_len; i++) {
+        std::cout << probes[i] << " ";
+    }
+    std::cout << std::endl;
+
     id.add_result(probes, prime);
 
     // Free memory on the device

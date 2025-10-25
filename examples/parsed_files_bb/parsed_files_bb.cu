@@ -14,7 +14,8 @@ int main(int argc, char* argv[])
 {
     auto start = std::chrono::high_resolution_clock::now();
 
-    std::ifstream file("/mt/home/jmaxwell/Documents/GPUFR/precomp/modded_funcs/hh_coeff1_n.txt"); // Replace with your file's path
+    // std::ifstream file("/mt/home/jmaxwell/Documents/GPUFR/precomp/modded_funcs/hh_coeff1_n.txt"); // Replace with your file's path
+    std::ifstream file("/mt/home/jmaxwell/Documents/GPUFR/examples/parsed_files_bb/simple_example.txt"); // Replace with your file's path
     // std::ifstream file("/mt/home/jmaxwell/Documents/GPUFR/examples/parsed_files_bb/example_fun.txt"); // Replace with your file's path
     if (!file) {
         std::cerr << "Could not open the file!" << std::endl;
@@ -34,14 +35,14 @@ int main(int argc, char* argv[])
 
     std::vector<std::string> var_lables = {"s", "t"};
 
-    interp_data id(100, tokens, var_lables);
+    interp_data id(5, tokens, var_lables);
 
     auto pre_interp = std::chrono::high_resolution_clock::now();
 
     // for (int i=0; i<19; i++)
-    // {
-    interpolate_dense(id);
-    // }
+    {
+        interpolate_dense(id);
+    }
 
     auto post_interp = std::chrono::high_resolution_clock::now();
 
@@ -56,5 +57,5 @@ int main(int argc, char* argv[])
     std::cout << "Parsing time: " << elapsed_parsed.count() << " seconds\n";
     std::cout << "Interp time: " << elapsed_interp.count() << " seconds\n";
 
-    // std::cout << id.to_str() << std::endl;
+    std::cout << id.to_str() << std::endl;
 }
