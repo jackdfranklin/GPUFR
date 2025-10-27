@@ -1,0 +1,3 @@
+add_executable(fast_taylor_test fast_taylor_test.cu)
+target_link_libraries(fast_taylor_test PRIVATE gpufr)
+set_target_properties(fast_taylor_test PROPERTIES CUDA_SEPARABLE_COMPILATION ON)

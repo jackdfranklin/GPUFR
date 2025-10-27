@@ -1,3 +1,4 @@
 add_subdirectory(hard_coded_bb)
 add_subdirectory(parsed_files_bb)
 add_subdirectory(flint_test)
+add_subdirectory(fast_taylor_test)

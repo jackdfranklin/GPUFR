@@ -6,7 +6,7 @@ add_library(ff_math OBJECT ff_math.cu ${HEADER_LIST})
 target_include_directories(ff_math PUBLIC ../include )
 set_target_properties(ff_math PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 
-add_library(gpufr ff_math.cu vandermonde_solver.cu parser.cpp bb_gen.cpp lagrange_solver.cu ntt.cu crt.cu detokenize.cu interp_data.cu ${HEADER_LIST})
+add_library(gpufr ff_math.cu vandermonde_solver.cu parser.cpp bb_gen.cpp lagrange_solver.cu ntt.cu crt.cu detokenize.cu interp_data.cu black_box.cu fast_taylor.cu context.cu ${HEADER_LIST})
 target_include_directories(gpufr PUBLIC ../include )
 target_link_libraries(gpufr PRIVATE ${GMP_LIBRARIES} CUDA::cudart CUDA::cuda_driver CUDA::nvrtc CUDA::nvJitLink)
 set_target_properties(gpufr PROPERTIES CUDA_SEPARABLE_COMPILATION ON)

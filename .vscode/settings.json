@@ -68,6 +68,8 @@
         "codecvt": "cpp",
         "stack": "cpp",
         "strstream": "cpp",
-        "cinttypes": "cpp"
+        "cinttypes": "cpp",
+        "complex": "cpp",
+        "cfenv": "cpp"
     }
 }

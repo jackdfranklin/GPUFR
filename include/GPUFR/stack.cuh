@@ -1,3 +1,7 @@
+#pragma once
+
+#include "GPUFR/types.hpp"
+
 namespace cu_type
 {
     template<typename T>
