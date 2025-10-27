@@ -29,6 +29,7 @@ class BlackBox
     u32 *d_stack_allocation;
 
     BlackBox(const std::vector<std::string> &tokens_list, const std::vector<std::string> &var_labels);
+    ~BlackBox();
 
     size_t get_token_size();
     void init_gpu(int probe_len);

@@ -37,3 +37,9 @@ void BlackBox::unload_from_gpu()
     CUDA_SAFE_CALL(cudaFree(d_cu_var_labels));
     CUDA_SAFE_CALL(cudaFree(d_stack_allocation));
 }
+
+BlackBox::~BlackBox()
+{
+    CUDA_SAFE_CALL(cudaFree(cu_tokens));
+    CUDA_SAFE_CALL(cudaFree(cu_var_labels));
+}
