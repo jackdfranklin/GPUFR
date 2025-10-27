@@ -54,6 +54,8 @@ namespace cu_type
                 if (data[i] == '\0')
                     return true;
             }
+
+            return false;
         }
 
         __host__ __device__ inline int size()
@@ -125,5 +127,6 @@ namespace cu_type
             result *= 10;
             result += (in[i] - '0');
         }
+        return result;
     } 
 }

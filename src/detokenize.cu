@@ -131,3 +131,28 @@ __host__ cu_type::string<STRING_LEN>* to_cu_string(const std::vector<std::string
 
 	return result;
 }
+
+__host__ void to_cu_string(const std::vector<std::string> &tokens, const std::vector<std::string> &vars, cu_type::string<STRING_LEN>* result, u32 prime)
+{
+	mpz_t mp_token, mp_prime;
+    mpz_init(mp_token);
+    mpz_init(mp_prime);
+	char buffer[STRING_LEN];
+
+	for (int i=0; i<tokens.size(); i++)
+	{
+		if (!is_operator(tokens[i]) && !is_var(tokens[i], vars))
+        {
+            mpz_set_str(mp_token, tokens[i].c_str(), 10);
+            mpz_set_ui(mp_prime, prime);
+            mpz_mod(mp_token, mp_token, mp_prime);
+			mpz_get_str(buffer, 10, mp_token);
+            result[i] = buffer;
+        } else {
+			result[i] = tokens[i];
+		}
+	}
+
+	mpz_clear(mp_token);
+	mpz_clear(mp_prime);
+}

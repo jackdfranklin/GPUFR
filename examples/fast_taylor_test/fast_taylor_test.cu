@@ -17,6 +17,7 @@ int main(int argc, char* argv[])
     auto start = std::chrono::high_resolution_clock::now();
 
     // std::ifstream file("/mt/home/jmaxwell/Documents/GPUFR/precomp/modded_funcs/hh_coeff1_n.txt"); // Replace with your file's path
+    // std::ifstream file("/mt/home/jmaxwell/Documents/GPUFR/examples/fast_taylor_test/large.txt"); // Replace with your file's path
     std::ifstream file("/mt/home/jmaxwell/Documents/GPUFR/examples/fast_taylor_test/example_1.txt"); // Replace with your file's path
     // std::ifstream file("/mt/home/jmaxwell/Documents/GPUFR/examples/parsed_files_bb/example_fun.txt"); // Replace with your file's path
     if (!file) {
@@ -36,11 +37,15 @@ int main(int argc, char* argv[])
 
     std::vector<std::string> var_lables = {"s"};
  
-    BlackBox bb(tokens, var_lables);
+    mpz_t x;
+    mpz_init(x);
+    // mpz_set_str(x, "8573059364191978776083980363001840384329942375293905978524297319624650389794171734800000", 10);
+    mpz_set_str(x, "10", 10);
+    BlackBox bb(tokens, var_lables, x);
 
     auto pre_interp = std::chrono::high_resolution_clock::now();
 
-    std::vector<u32> res = fast_1d_taylor(bb, 500);
+    std::vector<u32> res = fast_1d_taylor(bb, 3);
     for (int i=0; i<res.size(); i++)
     {
         std::cout << res[i] << " ";

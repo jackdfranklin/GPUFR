@@ -20,24 +20,23 @@ std::vector<u32> fast_1d_taylor(BlackBox& bb, int dim)
     int poly_size = pow(2, ceil(log2(dim)));
 
     u32 *d_probes, *d_results, *results;
-    size_t bytes_probes = poly_size * sizeof(u32);
+    size_t size_probes = poly_size * bb.get_num_primes();
+    size_t bytes_probes = size_probes * sizeof(u32);
     CUDA_SAFE_CALL(cudaMalloc(&d_probes, bytes_probes));
     CUDA_SAFE_CALL(cudaMalloc(&d_results, bytes_probes));
-    results = new u32[bytes_probes];
+    results = new u32[size_probes];
 
-    bool probes_success = false;
     bb.init_gpu(poly_size);
-    while (!probes_success){
-        bb.load_to_gpu(ctx.get_prime());
-        initialise_roots_of_unity(d_probes, poly_size, ctx);
+    bb.load_to_gpu(ctx);
+    initialise_roots_of_unity(d_probes, poly_size, bb.get_num_primes(), ctx);
 
-        execute_bb(bb, d_probes, poly_size, probes_success, ctx);
-        if (!probes_success)
-            ctx.new_prime();
-    }
+    execute_bb(bb, d_probes, poly_size, ctx);
+    CUDA_SAFE_CALL(cudaMemcpy(results, d_probes, bytes_probes, cudaMemcpyDeviceToHost));
+
     bb.unload_from_gpu();
 
-    do_ntt(d_probes, d_results, poly_size, ctx.get_roots(), ctx.get_prime(), true);
+    // do_ntt(d_probes, d_results, poly_size, ctx.get_roots(), ctx.get_prime(), true);
+    run_interp(d_probes, d_results, poly_size, bb.get_num_primes(), ctx);
 
     CUDA_SAFE_CALL(cudaMemcpy(results, d_results, bytes_probes, cudaMemcpyDeviceToHost));
 
@@ -60,16 +59,21 @@ __global__ void init_probes(u32* d_probes, u32 base_root, u32 prime, int require
     }
 }
 
-void initialise_roots_of_unity(u32* d_probes, int probe_len, Context& ctx)
+void initialise_roots_of_unity(u32* d_probes, int probe_len, int num_primes, Context& ctx)
 {
     int required_threads = probe_len;
     int threadsPerBlock = required_threads>256? 256 : required_threads;
     int blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
 
-    u32 prime = ctx.get_prime();
-    u32 base_root = ctx.get_root(log2(probe_len));
+    int base_root_index = log2(probe_len);
 
-    init_probes<<<blocksPerGrid, threadsPerBlock>>>(d_probes, base_root, prime, required_threads);
+    for (int i=0; i<num_primes; i++)
+    {
+        u32* probes = d_probes + probe_len*i;
+        u32 prime = ctx.get_prime(i);
+        u32 base_root = ctx.get_root(i, log2(probe_len));
+        init_probes<<<blocksPerGrid, threadsPerBlock>>>(probes, base_root, prime, required_threads);
+    }
 }
 
 __global__ void evaluate_probes(u32* d_probes, u32* stack_allocation, size_t max_stack, const cu_type::string<STRING_LEN>* tokens, const cu_type::string<STRING_LEN>* var_labels, int token_len, int prime, int required_threads)
@@ -85,12 +89,29 @@ __global__ void evaluate_probes(u32* d_probes, u32* stack_allocation, size_t max
     }
 }
 
-void execute_bb(BlackBox& bb, u32* d_probes, int probe_len, bool& probes_success, Context& ctx)
+void execute_bb(BlackBox& bb, u32* d_probes, int probe_len, Context& ctx)
 {
     int required_threads = probe_len;
     int threadsPerBlock = required_threads>256? 256 : required_threads;
     int blocksPerGrid = (required_threads + threadsPerBlock - 1) / threadsPerBlock;
 
-    evaluate_probes<<<blocksPerGrid, threadsPerBlock>>>(d_probes, bb.d_stack_allocation, bb.stack_depth, bb.d_cu_tokens, bb.d_cu_var_labels, bb.get_token_size(), ctx.get_prime(), required_threads);
-    probes_success = true;
+    for (int i=0; i<bb.get_num_primes(); i++)
+    {
+        u32* probes = d_probes + probe_len*i;
+        u32* stack_alloc = bb.get_stack_alloc(i);
+        cu_type::string<10>* tokens = bb.get_tokens(i);
+        evaluate_probes<<<blocksPerGrid, threadsPerBlock>>>(probes, stack_alloc, bb.stack_depth, tokens, bb.d_cu_var_labels, bb.get_token_size(), ctx.get_prime(i), required_threads);
+    }
+}
+
+void run_interp(u32* d_probes, u32* d_results, size_t poly_size, size_t num_primes, Context ctx)
+{
+    for (int i=0; i<num_primes; i++)
+    {
+        u32* probes = d_probes + poly_size*i;
+        u32* results = d_results + poly_size*i;
+        u32 prime = ctx.get_prime(i);
+        std::vector<u32> base_roots = ctx.get_roots(i);
+        do_ntt(probes, results, poly_size, base_roots, prime, true);
+    }
 }

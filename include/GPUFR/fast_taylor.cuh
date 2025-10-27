@@ -14,6 +14,7 @@
 std::vector<u32> fast_1d_taylor(BlackBox& bb, int dim);
 
 __global__ void init_probes(u32* d_probes, u32 base_root, u32 prime, int required_threads);
-void initialise_roots_of_unity(u32* d_probes, int probe_len, Context& ctx);
+void initialise_roots_of_unity(u32* d_probes, int probe_len, int num_primes, Context& ctx);
 __global__ void evaluate_probes(u32* d_probes, u32* stack_allocation, size_t max_stack, const cu_type::string<STRING_LEN>* tokens, const cu_type::string<STRING_LEN>* var_labels, int token_len, int prime, int required_threads);
-void execute_bb(BlackBox& bb, u32* d_probes, int probe_len, bool& probes_success, Context& ctx);
+void execute_bb(BlackBox& bb, u32* d_probes, int probe_len, Context& ctx);
+void run_interp(u32* d_probes, u32* d_results, size_t poly_size, size_t num_primes, Context ctx);

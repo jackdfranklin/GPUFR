@@ -26,4 +26,6 @@ __host__ cu_type::string<STRING_LEN>* to_cu_string(const std::vector<std::string
 
 __host__ cu_type::string<STRING_LEN>* to_cu_string(const std::vector<std::string> &tokens, const std::vector<std::string> &vars, u32 prime);
 
+__host__ void to_cu_string(const std::vector<std::string> &tokens, const std::vector<std::string> &vars, cu_type::string<STRING_LEN>* result, u32 prime);
+
 
